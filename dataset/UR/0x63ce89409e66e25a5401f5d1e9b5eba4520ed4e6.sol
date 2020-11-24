@@ -1,0 +1,200 @@
+ 
+
+ 
+contract ERC20Basic {
+  function totalSupply() public view returns (uint256);
+  function balanceOf(address who) public view returns (uint256);
+  function transfer(address to, uint256 value) public returns (bool);
+  event Transfer(address indexed from, address indexed to, uint256 value);
+}
+
+ 
+contract BasicToken is ERC20Basic {
+  using SafeMath for uint256;
+  mapping(address => uint256) balances;
+  uint256 totalSupply_;
+   
+  function totalSupply() public view returns (uint256) {
+    return totalSupply_;
+  }
+   
+  function transfer(address _to, uint256 _value) public returns (bool) {
+    require(_to != address(0));
+    require(_value <= balances[msg.sender]);
+     
+    balances[msg.sender] = balances[msg.sender].sub(_value);
+    balances[_to] = balances[_to].add(_value);
+    emit Transfer(msg.sender, _to, _value);
+    return true;
+  }
+   
+  function balanceOf(address _owner) public view returns (uint256 balance) {
+    return balances[_owner];
+  }
+}
+ 
+contract ERC20 is ERC20Basic {
+  function allowance(address owner, address spender) public view returns (uint256);
+  function transferFrom(address from, address to, uint256 value) public returns (bool);
+  function approve(address spender, uint256 value) public returns (bool);
+  event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
+ 
+contract StandardToken is ERC20, BasicToken {
+  mapping (address => mapping (address => uint256)) internal allowed;
+   
+  function transferFrom(address _from, address _to, uint256 _value) public returns (bool) {
+    require(_to != address(0));
+    require(_value <= balances[_from]);
+    require(_value <= allowed[_from][msg.sender]);
+    balances[_from] = balances[_from].sub(_value);
+    balances[_to] = balances[_to].add(_value);
+    allowed[_from][msg.sender] = allowed[_from][msg.sender].sub(_value);
+    emit Transfer(_from, _to, _value);
+    return true;
+  }
+   
+  function approve(address _spender, uint256 _value) public returns (bool) {
+    allowed[msg.sender][_spender] = _value;
+    emit Approval(msg.sender, _spender, _value);
+    return true;
+  }
+   
+  function allowance(address _owner, address _spender) public view returns (uint256) {
+    return allowed[_owner][_spender];
+  }
+   
+  function increaseApproval(address _spender, uint _addedValue) public returns (bool) {
+    allowed[msg.sender][_spender] = allowed[msg.sender][_spender].add(_addedValue);
+    emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+    return true;
+  }
+   
+  function decreaseApproval(address _spender, uint _subtractedValue) public returns (bool) {
+    uint oldValue = allowed[msg.sender][_spender];
+    if (_subtractedValue > oldValue) {
+      allowed[msg.sender][_spender] = 0;
+    } else {
+      allowed[msg.sender][_spender] = oldValue.sub(_subtractedValue);
+    }
+    emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+    return true;
+  }
+}
+
+ 
+contract Pausable is Ownable {
+  event Pause();
+  event Unpause();
+
+  bool public paused = false;
+
+   
+  modifier whenNotPaused() {
+    require(!paused);
+    _;
+  }
+
+   
+  modifier whenPaused() {
+    require(paused);
+    _;
+  }
+
+   
+  function pause() onlyOwner whenNotPaused public {
+    paused = true;
+    emit Pause();
+  }
+
+   
+  function unpause() onlyOwner whenPaused public {
+    paused = false;
+    emit Unpause();
+  }
+}
+
+ 
+contract PausableToken is StandardToken, Pausable {
+
+  function transfer(address _to, uint256 _value) public whenNotPaused returns (bool) {
+    return super.transfer(_to, _value);
+  }
+
+  function transferFrom(address _from, address _to, uint256 _value) public whenNotPaused returns (bool) {
+    return super.transferFrom(_from, _to, _value);
+  }
+
+  function approve(address _spender, uint256 _value) public whenNotPaused returns (bool) {
+    return super.approve(_spender, _value);
+  }
+
+  function increaseApproval(address _spender, uint _addedValue) public whenNotPaused returns (bool success) {
+    return super.increaseApproval(_spender, _addedValue);
+  }
+
+  function decreaseApproval(address _spender, uint _subtractedValue) public whenNotPaused returns (bool success) {
+    return super.decreaseApproval(_spender, _subtractedValue);
+  }
+}
+
+contract TimeLockToken is PausableToken {
+  mapping (address => uint256) public frozenTimestamp;
+
+  function freeze(address _target, uint256 _timestamp) public  onlyOwner returns(bool) {
+    require(_target != address(0));
+    frozenTimestamp[_target] = _timestamp;
+    return true;
+  }
+
+  function multiFreeze(address[] _targets, uint256[] _timestamps) public onlyOwner returns (bool) {
+    require(_targets.length == _timestamps.length);
+    uint256 len = _targets.length;
+    require(len > 0);
+
+    for (uint256 i = 0; i < len; i = i.add(1)) {
+      address _target = _targets[i];
+      require(_target != address(0));
+      uint256 _timestamp = _timestamps[i];
+      frozenTimestamp[_target] = _timestamp;
+    }
+    return true;
+  }
+
+  function transfer(address _to, uint256 _value) public whenNotPaused returns (bool) {
+    require(now > frozenTimestamp[msg.sender]);
+    return super.transfer(_to, _value);
+  }
+
+  function transferFrom(address _from, address _to, uint256 _value) public whenNotPaused returns (bool) {
+    require(now > frozenTimestamp[msg.sender]);
+    return super.transferFrom(_from, _to, _value);
+  }
+
+}
+
+contract GenethToken is TimeLockToken {
+    string  public name = "Geneth";
+    string  public symbol = "Ge";
+    uint8   public decimals = 18;
+    uint256    public totalSupply = 2000000000 * 10 ** uint256(decimals);
+    event Burn(address indexed from, uint256 value);
+    
+    function () payable public {
+        revert();
+    }
+    
+    constructor() public{
+        balances[msg.sender] = totalSupply;
+    }
+    
+    function burn(uint256 _value) public onlyOwner returns (bool) {
+        require(balances[msg.sender] >= _value, "not enough value in your owner address");
+        balances[msg.sender] = balances[msg.sender].sub(_value);
+        balances[address(0)] = balances[address(0)].add(_value);
+        totalSupply = totalSupply.sub(_value);
+    emit Burn(msg.sender, _value);
+    return true;
+  }
+}

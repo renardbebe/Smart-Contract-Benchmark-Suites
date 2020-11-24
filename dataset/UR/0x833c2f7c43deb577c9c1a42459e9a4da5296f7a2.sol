@@ -1,0 +1,150 @@
+ 
+
+ 
+
+pragma solidity ^0.4.24;
+
+
+library SafeMath {
+  function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+    if (a == 0) {
+      return 0;
+    }
+    uint256 c = a * b;
+    assert(c / a == b);
+    return c;
+  }
+
+  function div(uint256 a, uint256 b) internal pure returns (uint256) {
+     
+    uint256 c = a / b;
+     
+    return c;
+  }
+
+  function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+    assert(b <= a);
+    return a - b;
+  }
+
+  function add(uint256 a, uint256 b) internal pure returns (uint256) {
+    uint256 c = a + b;
+    assert(c >= a);
+    return c;
+  }
+}
+
+contract ERC20Basic {
+   
+  event Transfer(address indexed from, address indexed to, uint256 value);
+
+   
+  function totalSupply() public view returns (uint256);
+  function balanceOf(address addr) public view returns (uint256);
+  function transfer(address to, uint256 value) public returns (bool);
+}
+
+contract ERC20 is ERC20Basic {
+   
+  event Approval(address indexed owner, address indexed agent, uint256 value);
+
+   
+  function allowance(address owner, address agent) public view returns (uint256);
+  function transferFrom(address from, address to, uint256 value) public returns (bool);
+  function approve(address agent, uint256 value) public returns (bool);
+
+}
+
+library SafeERC20 {
+  
+  function safeTransfer(ERC20Basic token, address to, uint256 value) internal {
+    require(token.transfer(to, value));
+  }
+
+  function safeTransferFrom(
+    ERC20 token,
+    address from,
+    address to,
+    uint256 value
+  )
+    internal
+  {
+    require(token.transferFrom(from, to, value));
+  }
+
+  function safeApprove(ERC20 token, address spender, uint256 value) internal {
+    require(token.approve(spender, value));
+  }
+}
+
+contract Ownable {
+
+   
+  address public owner;
+
+   
+
+   
+  event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+   
+  constructor() public {
+    owner = msg.sender;
+  }
+
+  modifier onlyOwner() {
+    require(msg.sender == owner);
+    _;
+  }
+
+  function transferOwnership(address newOwner) public onlyOwner {
+    require(newOwner != address(0));
+    emit OwnershipTransferred(owner, newOwner);
+    owner = newOwner;
+  }
+
+   
+}
+
+
+contract TokenBatchTransfer is Ownable {
+  using SafeERC20 for ERC20Basic;
+  using SafeMath for uint256;
+
+   
+  ERC20Basic public token;
+   
+   
+  constructor (ERC20Basic tokenAddr) public {
+    token = ERC20Basic(tokenAddr);
+  }
+
+  function changeToken(ERC20Basic tokenAddr) public onlyOwner {
+    token = ERC20Basic(tokenAddr);
+  }
+
+  function balanceOfToken() public view returns (uint256 amount) {
+    return token.balanceOf(address(this));
+  }
+
+  function safeTransfer(address funder, uint256 amount) public onlyOwner {
+    token.safeTransfer(funder, amount);
+  }
+
+  function batchTransfer(address[] funders, uint256[] amounts) public onlyOwner {
+    require(funders.length > 0 && funders.length == amounts.length);
+
+    uint256 total = token.balanceOf(this);
+    require(total > 0);
+
+    uint256 fundersTotal = 0;
+    for (uint i = 0; i < amounts.length; i++) {
+      fundersTotal = fundersTotal.add(amounts[i]);
+    }
+    require(total >= fundersTotal);
+
+    for (uint j = 0; j < funders.length; j++) {
+      token.safeTransfer(funders[j], amounts[j]);
+    }
+  }
+}

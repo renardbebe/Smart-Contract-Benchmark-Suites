@@ -1,0 +1,642 @@
+ 
+
+pragma solidity 0.5.0;
+
+ 
+interface IERC20 {
+     
+    function totalSupply() external view returns (uint256);
+
+     
+    function balanceOf(address account) external view returns (uint256);
+
+     
+    function transfer(address recipient, uint256 amount) external returns (bool);
+
+     
+    function allowance(address owner, address spender) external view returns (uint256);
+
+     
+    function approve(address spender, uint256 amount) external returns (bool);
+
+     
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
+     
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+     
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
+ 
+
+ 
+library SafeMath {
+     
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        require(c >= a, "SafeMath: addition overflow");
+
+        return c;
+    }
+
+     
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        require(b <= a, "SafeMath: subtraction overflow");
+        uint256 c = a - b;
+
+        return c;
+    }
+
+     
+    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+         
+         
+         
+        if (a == 0) {
+            return 0;
+        }
+
+        uint256 c = a * b;
+        require(c / a == b, "SafeMath: multiplication overflow");
+
+        return c;
+    }
+
+     
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+         
+        require(b > 0, "SafeMath: division by zero");
+        uint256 c = a / b;
+         
+
+        return c;
+    }
+
+     
+    function mod(uint256 a, uint256 b) internal pure returns (uint256) {
+        require(b != 0, "SafeMath: modulo by zero");
+        return a % b;
+    }
+}
+
+ 
+
+ 
+contract ERC20 is IERC20 {
+    using SafeMath for uint256;
+
+    mapping (address => uint256) internal _balances;
+
+    mapping (address => mapping (address => uint256)) private _allowances;
+
+    uint256 private _totalSupply;
+
+     
+    function totalSupply() public view returns (uint256) {
+        return _totalSupply;
+    }
+
+     
+    function balanceOf(address account) public view returns (uint256) {
+        return _balances[account];
+    }
+
+     
+    function transfer(address recipient, uint256 amount) public returns (bool) {
+        _transfer(msg.sender, recipient, amount);
+        return true;
+    }
+
+     
+    function allowance(address owner, address spender) public view returns (uint256) {
+        return _allowances[owner][spender];
+    }
+
+     
+    function approve(address spender, uint256 value) public returns (bool) {
+        _approve(msg.sender, spender, value);
+        return true;
+    }
+
+     
+    function transferFrom(address sender, address recipient, uint256 amount) public returns (bool) {
+        _transfer(sender, recipient, amount);
+        _approve(sender, msg.sender, _allowances[sender][msg.sender].sub(amount));
+        return true;
+    }
+
+     
+    function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
+        _approve(msg.sender, spender, _allowances[msg.sender][spender].add(addedValue));
+        return true;
+    }
+
+     
+    function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
+        _approve(msg.sender, spender, _allowances[msg.sender][spender].sub(subtractedValue));
+        return true;
+    }
+
+     
+    function _transfer(address sender, address recipient, uint256 amount) internal {
+        require(sender != address(0), "ERC20: transfer from the zero address");
+        require(recipient != address(0), "ERC20: transfer to the zero address");
+
+        _balances[sender] = _balances[sender].sub(amount);
+        _balances[recipient] = _balances[recipient].add(amount);
+        emit Transfer(sender, recipient, amount);
+    }
+
+     
+    function _mint(address account, uint256 amount) internal {
+        require(account != address(0), "ERC20: mint to the zero address");
+
+        _totalSupply = _totalSupply.add(amount);
+        _balances[account] = _balances[account].add(amount);
+        emit Transfer(address(0), account, amount);
+    }
+
+      
+    function _burn(address account, uint256 value) internal {
+        require(account != address(0), "ERC20: burn from the zero address");
+
+        _totalSupply = _totalSupply.sub(value);
+        _balances[account] = _balances[account].sub(value);
+        emit Transfer(account, address(0), value);
+    }
+
+     
+    function _approve(address owner, address spender, uint256 value) internal {
+        require(owner != address(0), "ERC20: approve from the zero address");
+        require(spender != address(0), "ERC20: approve to the zero address");
+
+        _allowances[owner][spender] = value;
+        emit Approval(owner, spender, value);
+    }
+
+     
+    function _burnFrom(address account, uint256 amount) internal {
+        _burn(account, amount);
+        _approve(account, msg.sender, _allowances[account][msg.sender].sub(amount));
+    }
+}
+
+contract NTCToken is ERC20 {
+    string public name = "";  
+    string public symbol = "";  
+    uint8 public constant decimals = 18;  
+    uint256 public initialSupply = 0;
+
+    constructor(string memory _name, string memory _symbol, uint256 _initialSupply) public {
+        name = _name;
+        symbol = _symbol;
+        initialSupply = _initialSupply * 10**uint256(decimals);
+        super._mint(msg.sender, initialSupply);
+        owner = msg.sender;
+    }
+
+     
+    address public owner;
+
+    event OwnershipRenounced(address indexed previousOwner);
+    event OwnershipTransferred(
+    address indexed previousOwner,
+    address indexed newOwner
+    );
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+  
+    function renounceOwnership() public onlyOwner {
+        emit OwnershipRenounced(owner);
+        owner = address(0);
+    }
+
+   
+    function transferOwnership(address _newOwner) public onlyOwner {
+        _transferOwnership(_newOwner);
+    }
+
+   
+    function _transferOwnership(address _newOwner) internal {
+        require(_newOwner != address(0), "Already owner");
+        emit OwnershipTransferred(owner, _newOwner);
+        owner = _newOwner;
+    }
+
+     
+    address public crc;
+
+    event CrcTransferred(
+    address indexed previousCrc,
+    address indexed newCrc
+    );
+
+    function transferCrc(address _newCrc) public onlyOwner {
+        require(_newCrc != address(0), "Invalid Address");
+        emit CrcTransferred(crc, _newCrc);
+        crc = _newCrc;
+    }
+    
+    modifier onlyCrc() {
+        require(msg.sender == crc, "Not crc");
+        _;
+    }
+
+     
+    event Mint(address indexed to, uint256 amount);
+
+    function mint(
+        address _to,
+        uint256 _amount
+    )
+      public onlyCrc
+      returns (bool)
+    {
+        super._mint(_to, _amount);
+        emit Mint(_to, _amount);
+        return true;
+    }
+
+     
+    event Burn(address indexed burner, uint256 value);
+
+    function burn(address _who, uint256 _value) public onlyCrc returns (bool) {
+        require(_value <= super.balanceOf(_who), "Balance is too small.");
+
+        super._burn(_who, _value);
+        emit Burn(_who, _value);
+
+        return true;
+    }
+}
+
+contract NTC is ERC20 {
+    string public constant name = "NTC";  
+    string public constant symbol = "NTC";  
+    uint8 public constant decimals = 18;  
+    uint256 public constant initialSupply = 2400000000 * (10 ** uint256(decimals));
+
+    address[] public stakeHolders;
+
+    struct ProposalInfo {
+        uint8 mode;
+        uint256 amount;
+        NTCToken ct;
+        mapping (address => bool) agreement;
+    }
+    mapping (address => ProposalInfo) public proposals;
+    
+    event AddStakeHolder(address indexed stakeHolder);
+    event RemoveStakeHolder(address indexed stakeHolder);
+    
+    event MakeProposal(address indexed target, uint8 mode, uint256 amount, address token);
+    event AgreeProposal(address indexed target, address stakeHolder);
+
+    constructor() public {
+        super._mint(msg.sender, initialSupply);
+        owner = msg.sender;
+    }
+
+    modifier onlyStakeHolder() {
+        bool validation = false;
+        for (uint i=0; i < stakeHolders.length; i++){
+            if (stakeHolders[i] == msg.sender) {
+                validation = true;
+                break;
+            }
+        }
+        require(validation, "Not stake holder");
+        _;
+    }
+
+    function addStakeHolder(address newStakeHolder) public onlyOwner {
+        bool flag = false;
+        for (uint i=0; i < stakeHolders.length; i++){
+            if (stakeHolders[i] == newStakeHolder) flag = true;
+        }
+        require(!flag, "Already stake holder");
+        stakeHolders.push(newStakeHolder);
+        emit AddStakeHolder(newStakeHolder);
+    }
+
+    function removeStakeHolder(address oldStakeHolder) public onlyOwner {
+        for (uint i=0; i < stakeHolders.length; i++){
+            if (stakeHolders[i] == oldStakeHolder) {
+                stakeHolders[i] = stakeHolders[stakeHolders.length - 1];
+                stakeHolders.length--;
+                emit RemoveStakeHolder(oldStakeHolder);
+                break;
+            }
+        }
+    }
+
+    function makeProposal(address target, uint8 mode, uint256 amount, address token) public onlyOwner {
+        proposals[target] = ProposalInfo(mode, amount, NTCToken(token));
+        for (uint i=0; i < stakeHolders.length; i++){
+            proposals[target].agreement[stakeHolders[i]] = false;
+        }
+        emit MakeProposal(target, mode, amount, token);
+    }
+
+    function agreeProposal(address target) public onlyStakeHolder {
+        proposals[target].agreement[msg.sender] = true;
+        emit AgreeProposal(target, msg.sender);
+        if (_checkAgreement(target)) {
+            if (proposals[target].mode == 1) {
+                mint(target, proposals[target].amount, proposals[target].ct);
+                proposals[target].mode = 3;
+            }
+            else if (proposals[target].mode == 2) {
+                burn(target, proposals[target].amount, proposals[target].ct);
+                proposals[target].mode = 4;
+            }
+        }
+    }
+
+    
+    function _checkAgreement(address target) internal view returns (bool) {
+        uint num = 0;
+        for (uint i=0; i < stakeHolders.length; i++){
+            if (proposals[target].agreement[stakeHolders[i]]) {
+              num++;
+            }
+        }
+        if (stakeHolders.length == num) return true;
+        else return false;
+    }
+
+     
+    address public tokenWallet;
+
+    event TokenWalletTransferred(
+    address indexed previousTokenWallet,
+    address indexed newTokenWallet
+    );
+
+    function transferTokenWallet(address _newTokenWallet) public onlyOwner {
+        require(_newTokenWallet != address(0), "Invalid Address");
+        emit TokenWalletTransferred(tokenWallet, _newTokenWallet);
+        tokenWallet = _newTokenWallet;
+    }
+
+     
+    address public owner;
+
+    event OwnershipRenounced(address indexed previousOwner);
+    event OwnershipTransferred(
+    address indexed previousOwner,
+    address indexed newOwner
+    );
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+  
+    function renounceOwnership() public onlyOwner {
+        emit OwnershipRenounced(owner);
+        owner = address(0);
+    }
+
+   
+    function transferOwnership(address _newOwner) public onlyOwner {
+        _transferOwnership(_newOwner);
+    }
+
+   
+    function _transferOwnership(address _newOwner) internal {
+        require(_newOwner != address(0), "Already owner");
+        emit OwnershipTransferred(owner, _newOwner);
+        owner = _newOwner;
+    }
+
+     
+    event Pause();
+    event Unpause();
+
+    bool public paused = false;
+    
+     
+    modifier whenNotPaused() {
+        require(!paused, "Paused by owner");
+        _;
+    }
+
+     
+    modifier whenPaused() {
+        require(paused, "Not paused now");
+        _;
+    }
+
+     
+    function pause() public onlyOwner whenNotPaused {
+        paused = true;
+        emit Pause();
+    }
+
+     
+    function unpause() public onlyOwner whenPaused {
+        paused = false;
+        emit Unpause();
+    }
+
+     
+    event Frozen(address target);
+    event Unfrozen(address target);
+
+    mapping(address => bool) internal freezes;
+
+    modifier whenNotFrozen() {
+        require(!freezes[msg.sender], "Sender account is locked.");
+        _;
+    }
+
+    function freeze(address _target) public onlyOwner {
+        freezes[_target] = true;
+        emit Frozen(_target);
+    }
+
+    function unfreeze(address _target) public onlyOwner {
+        freezes[_target] = false;
+        emit Unfrozen(_target);
+    }
+
+    function isFrozen(address _target) public view returns (bool) {
+        return freezes[_target];
+    }
+
+    function transfer(
+        address _to,
+        uint256 _value
+    )
+      public
+      whenNotFrozen
+      whenNotPaused
+      returns (bool)
+    {
+        releaseLock(msg.sender);
+        return super.transfer(_to, _value);
+    }
+
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _value
+    )
+      public
+      whenNotPaused
+      returns (bool)
+    {
+        require(!freezes[_from], "From account is locked.");
+        releaseLock(_from);
+        return super.transferFrom(_from, _to, _value);
+    }
+
+     
+    event Mint(address indexed to, uint256 amount);
+
+    function mint(
+        address _to,
+        uint256 _amount,
+        NTCToken ct
+    )
+      internal
+      returns (bool)
+    {
+        require(tokenWallet != address(0), "token wallet is not set");
+        ct.mint(tokenWallet, _amount*10);
+         
+        super._mint(_to, _amount);
+        emit Mint(_to, _amount);
+        
+        return true;
+    }
+
+     
+    event Burn(address indexed burner, uint256 value);
+
+    function burn(address _who, uint256 _value, NTCToken ct) internal {
+        require(_value <= super.balanceOf(_who), "Balance is too small.");
+        require(tokenWallet != address(0), "token wallet is not set");
+
+        ct.burn(tokenWallet, _value*10);
+        _burn(_who, _value);
+        emit Burn(_who, _value);
+    }
+
+     
+    struct LockInfo {
+        uint256 releaseTime;
+        uint256 balance;
+    }
+    mapping(address => LockInfo[]) internal lockInfo;
+
+    event Lock(address indexed holder, uint256 value, uint256 releaseTime);
+    event Unlock(address indexed holder, uint256 value);
+
+    function balanceOf(address _holder) public view returns (uint256 balance) {
+        uint256 lockedBalance = 0;
+        for(uint256 i = 0; i < lockInfo[_holder].length ; i++ ) {
+            lockedBalance = lockedBalance.add(lockInfo[_holder][i].balance);
+        }
+        return super.balanceOf(_holder).add(lockedBalance);
+    }
+
+    function releaseLock(address _holder) internal {
+
+        for(uint256 i = 0; i < lockInfo[_holder].length ; i++ ) {
+            if (lockInfo[_holder][i].releaseTime <= now) {
+                _balances[_holder] = _balances[_holder].add(lockInfo[_holder][i].balance);
+                emit Unlock(_holder, lockInfo[_holder][i].balance);
+                lockInfo[_holder][i].balance = 0;
+
+                if (i != lockInfo[_holder].length - 1) {
+                    lockInfo[_holder][i] = lockInfo[_holder][lockInfo[_holder].length - 1];
+                    i--;
+                }
+                lockInfo[_holder].length--;
+
+            }
+        }
+    }
+    function lockCount(address _holder) public view returns (uint256) {
+        return lockInfo[_holder].length;
+    }
+    function lockState(address _holder, uint256 _idx) public view returns (uint256, uint256) {
+        return (lockInfo[_holder][_idx].releaseTime, lockInfo[_holder][_idx].balance);
+    }
+
+    function lock(address _holder, uint256 _amount, uint256 _releaseTime) public onlyOwner {
+        require(super.balanceOf(_holder) >= _amount, "Balance is too small.");
+        _balances[_holder] = _balances[_holder].sub(_amount);
+        lockInfo[_holder].push(
+            LockInfo(_releaseTime, _amount)
+        );
+        emit Lock(_holder, _amount, _releaseTime);
+    }
+
+    function lockAfter(address _holder, uint256 _amount, uint256 _afterTime) public onlyOwner {
+        require(super.balanceOf(_holder) >= _amount, "Balance is too small.");
+        _balances[_holder] = _balances[_holder].sub(_amount);
+        lockInfo[_holder].push(
+            LockInfo(now + _afterTime, _amount)
+        );
+        emit Lock(_holder, _amount, now + _afterTime);
+    }
+
+    function unlock(address _holder, uint256 i) public onlyOwner {
+        require(i < lockInfo[_holder].length, "No lock information.");
+
+        _balances[_holder] = _balances[_holder].add(lockInfo[_holder][i].balance);
+        emit Unlock(_holder, lockInfo[_holder][i].balance);
+        lockInfo[_holder][i].balance = 0;
+
+        if (i != lockInfo[_holder].length - 1) {
+            lockInfo[_holder][i] = lockInfo[_holder][lockInfo[_holder].length - 1];
+        }
+        lockInfo[_holder].length--;
+    }
+
+    function transferWithLock(address _to, uint256 _value, uint256 _releaseTime) public onlyOwner returns (bool) {
+        require(_to != address(0), "wrong address");
+        require(_value <= super.balanceOf(owner), "Not enough balance");
+
+        _balances[owner] = _balances[owner].sub(_value);
+        lockInfo[_to].push(
+            LockInfo(_releaseTime, _value)
+        );
+        emit Transfer(owner, _to, _value);
+        emit Lock(_to, _value, _releaseTime);
+
+        return true;
+    }
+
+    function transferWithLockAfter(address _to, uint256 _value, uint256 _afterTime) public onlyOwner returns (bool) {
+        require(_to != address(0), "wrong address");
+        require(_value <= super.balanceOf(owner), "Not enough balance");
+
+        _balances[owner] = _balances[owner].sub(_value);
+        lockInfo[_to].push(
+            LockInfo(now + _afterTime, _value)
+        );
+        emit Transfer(owner, _to, _value);
+        emit Lock(_to, _value, now + _afterTime);
+
+        return true;
+    }
+
+    function currentTime() public view returns (uint256) {
+        return now;
+    }
+
+    function afterTime(uint256 _value) public view returns (uint256) {
+        return now + _value;
+    }
+}

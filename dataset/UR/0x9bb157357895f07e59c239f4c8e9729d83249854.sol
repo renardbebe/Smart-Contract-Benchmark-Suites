@@ -1,0 +1,922 @@
+ 
+
+ 
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+contract Ownable {
+    address public owner;
+
+    event TransferOwnership(address _from, address _to);
+
+    constructor() public {
+        owner = msg.sender;
+        emit TransferOwnership(address(0), msg.sender);
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "only owner");
+        _;
+    }
+
+    function setOwner(address _owner) external onlyOwner {
+        emit TransferOwnership(owner, _owner);
+        owner = _owner;
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+ 
+
+
+library AddressMinHeap {
+    using AddressMinHeap for AddressMinHeap.Heap;
+
+    struct Heap {
+        uint256[] entries;
+        mapping(address => uint256) index;
+    }
+
+    function initialize(Heap storage _heap) internal {
+        require(_heap.entries.length == 0, "already initialized");
+        _heap.entries.push(0);
+    }
+
+    function encode(address _addr, uint256 _value) internal pure returns (uint256 _entry) {
+         
+        assembly {
+            _entry := not(or(and(0xffffffffffffffffffffffffffffffffffffffff, _addr), shl(160, _value)))
+        }
+    }
+
+    function decode(uint256 _entry) internal pure returns (address _addr, uint256 _value) {
+         
+        assembly {
+            let entry := not(_entry)
+            _addr := and(entry, 0xffffffffffffffffffffffffffffffffffffffff)
+            _value := shr(160, entry)
+        }
+    }
+
+    function decodeAddress(uint256 _entry) internal pure returns (address _addr) {
+         
+        assembly {
+            _addr := and(not(_entry), 0xffffffffffffffffffffffffffffffffffffffff)
+        }
+    }
+
+    function top(Heap storage _heap) internal view returns(address, uint256) {
+        if (_heap.entries.length < 2) {
+            return (address(0), 0);
+        }
+
+        return decode(_heap.entries[1]);
+    }
+
+    function has(Heap storage _heap, address _addr) internal view returns (bool) {
+        return _heap.index[_addr] != 0;
+    }
+
+    function size(Heap storage _heap) internal view returns (uint256) {
+        return _heap.entries.length - 1;
+    }
+
+    function entry(Heap storage _heap, uint256 _i) internal view returns (address, uint256) {
+        return decode(_heap.entries[_i + 1]);
+    }
+
+     
+    function popTop(Heap storage _heap) internal returns(address _addr, uint256 _value) {
+         
+        uint256 heapLength = _heap.entries.length;
+        require(heapLength > 1, "The heap does not exists");
+
+         
+        (_addr, _value) = decode(_heap.entries[1]);
+        _heap.index[_addr] = 0;
+
+        if (heapLength == 2) {
+            _heap.entries.length = 1;
+        } else {
+             
+            uint256 val = _heap.entries[heapLength - 1];
+            _heap.entries[1] = val;
+
+             
+            _heap.entries.length = heapLength - 1;
+
+             
+            uint256 ind = 1;
+
+             
+            ind = _heap.bubbleDown(ind, val);
+
+             
+            _heap.index[decodeAddress(val)] = ind;
+        }
+    }
+
+     
+    function insert(Heap storage _heap, address _addr, uint256 _value) internal {
+        require(_heap.index[_addr] == 0, "The entry already exists");
+
+         
+        uint256 encoded = encode(_addr, _value);
+        _heap.entries.push(encoded);
+
+         
+        uint256 currentIndex = _heap.entries.length - 1;
+
+         
+        currentIndex = _heap.bubbleUp(currentIndex, encoded);
+
+         
+        _heap.index[_addr] = currentIndex;
+    }
+
+    function update(Heap storage _heap, address _addr, uint256 _value) internal {
+        uint256 ind = _heap.index[_addr];
+        require(ind != 0, "The entry does not exists");
+
+        uint256 can = encode(_addr, _value);
+        uint256 val = _heap.entries[ind];
+        uint256 newInd;
+
+        if (can < val) {
+             
+            newInd = _heap.bubbleDown(ind, can);
+        } else if (can > val) {
+             
+            newInd = _heap.bubbleUp(ind, can);
+        } else {
+             
+            return;
+        }
+
+         
+        _heap.entries[newInd] = can;
+
+         
+        if (newInd != ind) {
+            _heap.index[_addr] = newInd;
+        }
+    }
+
+    function bubbleUp(Heap storage _heap, uint256 _ind, uint256 _val) internal returns (uint256 ind) {
+         
+        ind = _ind;
+        if (ind != 1) {
+            uint256 parent = _heap.entries[ind / 2];
+            while (parent < _val) {
+                 
+                (_heap.entries[ind / 2], _heap.entries[ind]) = (_val, parent);
+
+                 
+                _heap.index[decodeAddress(parent)] = ind;
+
+                 
+                ind = ind / 2;
+                if (ind == 1) {
+                    break;
+                }
+
+                 
+                parent = _heap.entries[ind / 2];
+            }
+        }
+    }
+
+    function bubbleDown(Heap storage _heap, uint256 _ind, uint256 _val) internal returns (uint256 ind) {
+         
+        ind = _ind;
+
+        uint256 lenght = _heap.entries.length;
+        uint256 target = lenght - 1;
+
+        while (ind * 2 < lenght) {
+             
+            uint256 j = ind * 2;
+
+             
+            uint256 leftChild = _heap.entries[j];
+
+             
+            uint256 childValue;
+
+            if (target > j) {
+                 
+
+                 
+                uint256 rightChild = _heap.entries[j + 1];
+
+                 
+                 
+                 
+                if (leftChild < rightChild) {
+                    childValue = rightChild;
+                    j = j + 1;
+                } else {
+                     
+                    childValue = leftChild;
+                }
+            } else {
+                 
+                childValue = leftChild;
+            }
+
+             
+            if (_val > childValue) {
+                break;
+            }
+
+             
+            (_heap.entries[ind], _heap.entries[j]) = (childValue, _val);
+
+             
+            _heap.index[decodeAddress(childValue)] = ind;
+
+             
+            ind = j;
+        }
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+contract StorageUnit {
+    address private owner;
+    mapping(bytes32 => bytes32) private store;
+
+    constructor() public {
+        owner = msg.sender;
+    }
+
+    function write(bytes32 _key, bytes32 _value) external {
+         
+        require(msg.sender == owner);
+        store[_key] = _value;
+    }
+
+    function read(bytes32 _key) external view returns (bytes32) {
+        return store[_key];
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+library IsContract {
+    function isContract(address _addr) internal view returns (bool) {
+        bytes32 codehash;
+         
+        assembly { codehash := extcodehash(_addr) }
+        return codehash != bytes32(0) && codehash != bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470);
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+
+
+library DistributedStorage {
+    function contractSlot(bytes32 _key) private view returns (address) {
+        return address(
+            uint256(
+                keccak256(
+                    abi.encodePacked(
+                        byte(0xff),
+                        address(this),
+                        _key,
+                        keccak256(type(StorageUnit).creationCode)
+                    )
+                )
+            )
+        );
+    }
+
+    function deploy(bytes32 _key) private {
+        bytes memory slotcode = type(StorageUnit).creationCode;
+         
+        assembly{ pop(create2(0, add(slotcode, 0x20), mload(slotcode), _key)) }
+    }
+
+    function write(
+        bytes32 _struct,
+        bytes32 _key,
+        bytes32 _value
+    ) internal {
+        StorageUnit store = StorageUnit(contractSlot(_struct));
+        if (!IsContract.isContract(address(store))) {
+            deploy(_struct);
+        }
+
+         
+        (bool success, ) = address(store).call(
+            abi.encodeWithSelector(
+                store.write.selector,
+                _key,
+                _value
+            )
+        );
+
+        require(success, "error writing storage");
+    }
+
+    function read(
+        bytes32 _struct,
+        bytes32 _key
+    ) internal view returns (bytes32) {
+        StorageUnit store = StorageUnit(contractSlot(_struct));
+        if (!IsContract.isContract(address(store))) {
+            return bytes32(0);
+        }
+
+         
+        (bool success, bytes memory data) = address(store).staticcall(
+            abi.encodeWithSelector(
+                store.read.selector,
+                _key
+            )
+        );
+
+        require(success, "error reading storage");
+        return abi.decode(data, (bytes32));
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+library SafeMath {
+    function add(uint256 x, uint256 y) internal pure returns (uint256) {
+        uint256 z = x + y;
+        require(z >= x, "Add overflow");
+        return z;
+    }
+
+    function sub(uint256 x, uint256 y) internal pure returns (uint256) {
+        require(x >= y, "Sub underflow");
+        return x - y;
+    }
+
+    function mult(uint256 x, uint256 y) internal pure returns (uint256) {
+        if (x == 0) {
+            return 0;
+        }
+
+        uint256 z = x * y;
+        require(z / x == y, "Mult overflow");
+        return z;
+    }
+
+    function div(uint256 x, uint256 y) internal pure returns (uint256) {
+        require(y != 0, "Div by zero");
+        return x / y;
+    }
+
+    function divRound(uint256 x, uint256 y) internal pure returns (uint256) {
+        require(y != 0, "Div by zero");
+        uint256 r = x / y;
+        if (x % y != 0) {
+            r = r + 1;
+        }
+
+        return r;
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+library Math {
+    function orderOfMagnitude(uint256 input) internal pure returns (uint256){
+        uint256 counter = uint(-1);
+        uint256 temp = input;
+
+        do {
+            temp /= 10;
+            counter++;
+        } while (temp != 0);
+
+        return counter;
+    }
+
+    function min(uint256 _a, uint256 _b) internal pure returns (uint256) {
+        if (_a < _b) {
+            return _a;
+        } else {
+            return _b;
+        }
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+contract GasPump {
+    bytes32 private stub;
+
+    modifier requestGas(uint256 _factor) {
+        if (tx.gasprice == 0) {
+            uint256 startgas = gasleft();
+            _;
+            uint256 delta = startgas - gasleft();
+            uint256 target = (delta * _factor) / 100;
+            startgas = gasleft();
+            while (startgas - gasleft() < target) {
+                 
+                stub = keccak256(abi.encodePacked(stub));
+            }
+        } else {
+            _;
+        }
+    }
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+interface IERC20 {
+    event Transfer(address indexed _from, address indexed _to, uint256 _value);
+    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+    function transfer(address _to, uint _value) external returns (bool success);
+    function transferFrom(address _from, address _to, uint256 _value) external returns (bool success);
+    function allowance(address _owner, address _spender) external view returns (uint256 remaining);
+    function approve(address _spender, uint256 _value) external returns (bool success);
+    function balanceOf(address _owner) external view returns (uint256 balance);
+}
+
+ 
+
+pragma solidity ^0.5.10;
+
+
+
+
+
+
+
+
+
+contract ShuffleToken is Ownable, GasPump, IERC20 {
+    using AddressMinHeap for AddressMinHeap.Heap;
+    using DistributedStorage for bytes32;
+    using SafeMath for uint256;
+
+     
+    event Winner(address indexed _addr, uint256 _value);
+
+     
+    event JoinHeap(address indexed _address, uint256 _balance, uint256 _prevSize);
+    event LeaveHeap(address indexed _address, uint256 _balance, uint256 _prevSize);
+
+     
+    event SetName(string _prev, string _new);
+    event SetExtraGas(uint256 _prev, uint256 _new);
+    event WhitelistFrom(address _addr, bool _whitelisted);
+    event WhitelistTo(address _addr, bool _whitelisted);
+
+    uint256 public totalSupply;
+
+    bytes32 private constant BALANCE_KEY = keccak256("balance");
+    bytes32 private constant NONCE_KEY = keccak256("nonce");
+
+     
+    uint256 public constant FEE = 100;
+    uint256 public constant TOP_SIZE = 512;
+
+     
+    AddressMinHeap.Heap private heap;
+
+     
+    string public name = "shuffle.monster token V2";
+    string public constant symbol = "SHUF";
+    uint8 public constant decimals = 18;
+
+     
+    mapping(address => bool) public whitelistFrom;
+    mapping(address => bool) public whitelistTo;
+
+     
+    uint256 public extraGas;
+    bool inited;
+
+    function init(
+        address _to,
+        uint256 _amount
+    ) external {
+        require(!inited);
+        inited = true;
+        heap.initialize();
+        extraGas = 15;
+        emit SetExtraGas(0, extraGas);
+        emit Transfer(address(0), _to, _amount);
+        _setBalance(_to, _amount);
+        totalSupply = _amount;
+    }
+
+     
+     
+     
+
+    function _toKey(address a) internal pure returns (bytes32) {
+        return bytes32(uint256(a));
+    }
+
+    function _balanceOf(address _addr) internal view returns (uint256) {
+        return uint256(_toKey(_addr).read(BALANCE_KEY));
+    }
+
+    function _allowance(address _addr, address _spender) internal view returns (uint256) {
+        return uint256(_toKey(_addr).read(keccak256(abi.encodePacked("allowance", _spender))));
+    }
+
+    function _nonce(address _addr, uint256 _cat) internal view returns (uint256) {
+        return uint256(_toKey(_addr).read(keccak256(abi.encodePacked("nonce", _cat))));
+    }
+
+    function _setAllowance(address _addr, address _spender, uint256 _value) internal {
+        _toKey(_addr).write(keccak256(abi.encodePacked("allowance", _spender)), bytes32(_value));
+    }
+
+    function _setNonce(address _addr, uint256 _cat, uint256 _value) internal {
+        _toKey(_addr).write(keccak256(abi.encodePacked("nonce", _cat)), bytes32(_value));
+    }
+
+    function _setBalance(address _addr, uint256 _balance) internal {
+        _toKey(_addr).write(BALANCE_KEY, bytes32(_balance));
+        _computeHeap(_addr, _balance);
+    }
+
+    function getNonce(address _addr, uint256 _cat) external view returns (uint256) {
+        return _nonce(_addr, _cat);
+    }
+
+     
+     
+     
+
+    function _isWhitelisted(address _from, address _to) internal view returns (bool) {
+        return whitelistFrom[_from]||whitelistTo[_to];
+    }
+
+    function _random(address _s1, uint256 _s2, uint256 _s3, uint256 _max) internal pure returns (uint256) {
+        uint256 rand = uint256(keccak256(abi.encodePacked(_s1, _s2, _s3)));
+        return rand % (_max + 1);
+    }
+
+    function _pickWinner(address _from, uint256 _value) internal returns (address winner) {
+         
+        uint256 magnitude = Math.orderOfMagnitude(_value);
+         
+        uint256 nonce = _nonce(_from, magnitude);
+        _setNonce(_from, magnitude, nonce + 1);
+         
+        (winner,) = heap.entry(_random(_from, nonce, magnitude, heap.size() - 1));
+    }
+
+    function _transferFrom(address _operator, address _from, address _to, uint256 _value, bool _skipWhitelist) internal {
+        if (_value == 0) {
+            emit Transfer(_from, _to, 0);
+            return;
+        }
+
+        uint256 balanceFrom = _balanceOf(_from);
+        require(balanceFrom >= _value, "balance not enough");
+
+        if (_from != _operator) {
+            uint256 allowanceFrom = _allowance(_from, _operator);
+            if (allowanceFrom != uint(-1)) {
+                require(allowanceFrom >= _value, "allowance not enough");
+                _setAllowance(_from, _operator, allowanceFrom.sub(_value));
+            }
+        }
+
+        uint256 receive = _value;
+        _setBalance(_from, balanceFrom.sub(_value));
+
+        if (_skipWhitelist || !_isWhitelisted(_from, _to)) {
+            uint256 burn = _value.divRound(FEE);
+            uint256 shuf = _value == 1 ? 0 : burn;
+            receive = receive.sub(burn.add(shuf));
+
+             
+            totalSupply = totalSupply.sub(burn);
+            emit Transfer(_from, address(0), burn);
+
+             
+             
+            address winner = _pickWinner(_from, _value);
+             
+            _setBalance(winner, _balanceOf(winner).add(shuf));
+            emit Winner(winner, shuf);
+            emit Transfer(_from, winner, shuf);
+        }
+
+         
+        _setBalance(_to, _balanceOf(_to).add(receive));
+        emit Transfer(_from, _to, receive);
+    }
+
+    function _computeHeap(address _addr, uint256 _new) internal {
+        uint256 size = heap.size();
+        if (size == 0) {
+            emit JoinHeap(_addr, _new, 0);
+            heap.insert(_addr, _new);
+            return;
+        }
+
+        (, uint256 lastBal) = heap.top();
+
+        if (heap.has(_addr)) {
+            heap.update(_addr, _new);
+            if (_new == 0) {
+                heap.popTop();
+                emit LeaveHeap(_addr, 0, size);
+            }
+        } else {
+             
+            if (_new != 0 && (size < TOP_SIZE || lastBal < _new)) {
+                 
+                if (size >= TOP_SIZE) {
+                    (address _poped, uint256 _balance) = heap.popTop();
+                    emit LeaveHeap(_poped, _balance, size);
+                }
+
+                 
+                heap.insert(_addr, _new);
+                emit JoinHeap(_addr, _new, size);
+            }
+        }
+    }
+
+     
+     
+     
+
+    function setWhitelistedTo(address _addr, bool _whitelisted) external onlyOwner {
+        emit WhitelistTo(_addr, _whitelisted);
+        whitelistTo[_addr] = _whitelisted;
+    }
+
+    function setWhitelistedFrom(address _addr, bool _whitelisted) external onlyOwner {
+        emit WhitelistFrom(_addr, _whitelisted);
+        whitelistFrom[_addr] = _whitelisted;
+    }
+
+    function setName(string calldata _name) external onlyOwner {
+        emit SetName(name, _name);
+        name = _name;
+    }
+
+    function setExtraGas(uint256 _gas) external onlyOwner {
+        emit SetExtraGas(extraGas, _gas);
+        extraGas = _gas;
+    }
+
+     
+     
+     
+
+    function heapSize() external view returns (uint256) {
+        return heap.size();
+    }
+
+    function heapEntry(uint256 _i) external view returns (address, uint256) {
+        return heap.entry(_i);
+    }
+
+    function heapTop() external view returns (address, uint256) {
+        return heap.top();
+    }
+
+    function heapIndex(address _addr) external view returns (uint256) {
+        return heap.index[_addr];
+    }
+
+     
+     
+     
+
+    function balanceOf(address _addr) external view returns (uint256) {
+        return _balanceOf(_addr);
+    }
+
+    function allowance(address _addr, address _spender) external view returns (uint256) {
+        return _allowance(_addr, _spender);
+    }
+
+    function approve(address _spender, uint256 _value) external returns (bool) {
+        emit Approval(msg.sender, _spender, _value);
+        _setAllowance(msg.sender, _spender, _value);
+        return true;
+    }
+
+    function transfer(address _to, uint256 _value) external requestGas(extraGas) returns (bool) {
+        _transferFrom(msg.sender, msg.sender, _to, _value, false);
+        return true;
+    }
+
+    function transferWithFee(address _to, uint256 _value) external requestGas(extraGas) returns (bool) {
+        _transferFrom(msg.sender, msg.sender, _to, _value, true);
+        return true;
+    }
+
+    function transferFrom(address _from, address _to, uint256 _value) external requestGas(extraGas) returns (bool) {
+        _transferFrom(msg.sender, _from, _to, _value, false);
+        return true;
+    }
+}
+
+library SigUtils {
+     
+    function ecrecover2(
+        bytes32 _hash,
+        bytes memory _signature
+    ) internal pure returns (address) {
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+         
+        assembly {
+            r := mload(add(_signature, 32))
+            s := mload(add(_signature, 64))
+            v := and(mload(add(_signature, 65)), 255)
+        }
+
+        if (v < 27) {
+            v += 27;
+        }
+
+        return ecrecover(
+            _hash,
+            v,
+            r,
+            s
+        );
+    }
+}
+
+
+pragma solidity ^0.5.10;
+
+
+
+
+
+
+contract Airdrop is Ownable {
+    using IsContract for address payable;
+
+    ShuffleToken public shuffleToken;
+
+     
+    uint64 public maxClaimedBy = 100;
+
+    event SetMaxClaimedBy(uint256 _max);
+    event SetSigner(address _signer, bool _active);
+    event Claimed(address _by, address _to, address _signer, uint256 _value, uint256 _claimed);
+    event ClaimedOwner(address _owner, uint256 _tokens);
+
+    uint256 public constant MINT_AMOUNT = 1010101010101010101010101;
+    uint256 public constant CREATOR_AMOUNT = (MINT_AMOUNT * 6) / 100;
+    uint256 public constant SHUFLE_BY_ETH = 150;
+    uint256 public constant MAX_CLAIM_ETH = 10 ether;
+
+    mapping(address => bool) public isSigner;
+
+    mapping(address => uint256) public claimed;
+    mapping(address => uint256) public numberClaimedBy;
+    bool public creatorClaimed;
+    Airdrop public prevAirdrop;
+
+    constructor(ShuffleToken _token, Airdrop _prev) public {
+        shuffleToken = _token;
+        shuffleToken.init(address(this), MINT_AMOUNT);
+        emit SetMaxClaimedBy(maxClaimedBy);
+        prevAirdrop = _prev;
+    }
+
+     
+     
+     
+
+    function setMaxClaimedBy(uint64 _max) external onlyOwner {
+        maxClaimedBy = _max;
+        emit SetMaxClaimedBy(_max);
+    }
+
+    function setSigner(address _signer, bool _active) external onlyOwner {
+        isSigner[_signer] = _active;
+        emit SetSigner(_signer, _active);
+    }
+
+    function setSigners(address[] calldata _signers, bool _active) external onlyOwner {
+        for (uint256 i = 0; i < _signers.length; i++) {
+            address signer = _signers[i];
+            isSigner[signer] = _active;
+            emit SetSigner(signer, _active);
+        }
+    }
+
+     
+     
+     
+
+    mapping(address => bool) private cvf;
+
+    event CallCVF(address _from, address _to);
+
+    function supportsFallback(address _to) external returns (bool) {
+        emit CallCVF(msg.sender, _to);
+        require(!cvf[msg.sender], "cfv");
+        cvf[msg.sender] = true;
+        return checkFallback(_to);
+    }
+
+     
+     
+     
+
+    function _selfBalance() internal view returns (uint256) {
+        return shuffleToken.balanceOf(address(this));
+    }
+
+    function checkFallback(address _to) private returns (bool success) {
+         
+        (success, ) = _to.call.value(1)("");
+    }
+
+    function claim(
+        address _to,
+        uint256 _val,
+        bytes calldata _sig
+    ) external {
+        bytes32 _hash = keccak256(abi.encodePacked(_to, uint96(_val)));
+        address signer = SigUtils.ecrecover2(_hash, _sig);
+
+        require(isSigner[signer], "signature not valid");
+        require(prevAirdrop.claimed(_to) == 0, "already claimed in prev airdrop");
+
+        uint256 balance = _selfBalance();
+        uint256 claimVal = Math.min(
+            balance,
+            Math.min(
+                _val,
+                MAX_CLAIM_ETH
+            ) * SHUFLE_BY_ETH
+        );
+
+        require(claimed[_to] == 0, "already claimed");
+        claimed[_to] = claimVal;
+
+        if (msg.sender != _to) {
+            uint256 _numberClaimedBy = numberClaimedBy[msg.sender];
+            require(_numberClaimedBy <= maxClaimedBy, "max claim reached");
+            numberClaimedBy[msg.sender] = _numberClaimedBy + 1;
+            require(checkFallback(_to), "_to address can't receive tokens");
+        }
+
+        shuffleToken.transferWithFee(_to, claimVal);
+
+        emit Claimed(msg.sender, _to, signer, _val, claimVal);
+
+        if (balance == claimVal && _selfBalance() == 0) {
+            selfdestruct(address(uint256(owner)));
+        }
+    }
+    
+    event Migrated(address _addr, uint256 _balance);
+    mapping(address => uint256) public migrated;
+    
+    function migrate(address _addr, uint256 _balance, uint256 _require) external {
+        require(isSigner[msg.sender]);
+        require(migrated[_addr] == _require);
+        migrated[_addr] = migrated[_addr] + _balance;
+        shuffleToken.transfer(_addr, _balance);
+        emit Migrated(_addr, _balance);
+    }
+}

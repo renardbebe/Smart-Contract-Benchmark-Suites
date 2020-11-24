@@ -1,0 +1,159 @@
+ 
+
+pragma solidity ^0.4.21;
+
+
+ 
+library SafeMath {
+
+     
+    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0) {
+            return 0;
+        }
+        uint256 c = a * b;
+        assert(c / a == b);
+        return c;
+    }
+
+     
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+         
+         
+         
+        return a / b;
+    }
+
+     
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        assert(b <= a);
+        return a - b;
+    }
+
+     
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        assert(c >= a);
+        return c;
+    }
+}
+
+
+contract Ownable {
+
+    address public owner;
+
+    function Ownable() public {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner);
+        _;
+    }
+
+    function transferOwnership(address newOwner) public onlyOwner {
+        require(newOwner != address(0));
+        owner = newOwner;
+    }
+}
+
+interface smartContract {
+    function transfer(address _to, uint256 _value) payable external;
+    function approve(address _spender, uint256 _value) external returns (bool success);
+}
+
+contract Basic is Ownable {
+    using SafeMath for uint256;
+
+     
+    mapping(address => uint256) public totalAmount;
+    mapping(address => uint256) public availableAmount;
+    mapping(address => uint256) public withdrawedAmount;
+    uint[] public periods;
+    uint256 public currentPeriod;
+    smartContract public contractAddress;
+    uint256 public ownerWithdrawalDate;
+
+     
+    modifier onlyPayloadSize(uint size) {
+        assert(msg.data.length == size + 4);
+        _;
+    }
+
+     
+    function Basic(address _contractAddress) public onlyOwner {
+        contractAddress = smartContract(_contractAddress);
+    }
+
+    function _recalculateAvailable(address _addr) internal {
+        _updateCurrentPeriod();
+        uint256 available;
+        uint256 calcPeriod = currentPeriod + 1;
+        if (calcPeriod < periods.length) {
+            available = totalAmount[_addr].div(periods.length).mul(calcPeriod);
+             
+            require(available > withdrawedAmount[_addr]);
+             
+            available = available.sub(withdrawedAmount[_addr]);
+        } else {
+            available = totalAmount[_addr].sub(withdrawedAmount[_addr]);
+        }
+        availableAmount[_addr] = available;
+    }
+
+    function addRecipient(address _from, uint256 _amount) external onlyOwner onlyPayloadSize(2 * 32) {
+        require(_from != 0x0);
+        require(totalAmount[_from] == 0);
+        totalAmount[_from] = _amount;
+        availableAmount[_from] = 0;
+        withdrawedAmount[_from] = 0;
+    }
+
+    function withdraw() public payable {
+        _withdraw(msg.sender);
+    }
+
+    function _withdraw(address _addr) internal {
+        require(_addr != 0x0);
+        require(totalAmount[_addr] > 0);
+
+         
+        _recalculateAvailable(_addr);
+        require(availableAmount[_addr] > 0);
+        uint256 available = availableAmount[_addr];
+        withdrawedAmount[_addr] = withdrawedAmount[_addr].add(available);
+        availableAmount[_addr] = 0;
+
+        contractAddress.transfer(_addr, available);
+    }
+
+    function triggerWithdraw(address _addr) public payable onlyOwner {
+        _withdraw(_addr);
+    }
+
+     
+    function withdrawToOwner(uint256 _amount) external onlyOwner {
+         
+        require(now > ownerWithdrawalDate);
+        contractAddress.transfer(msg.sender, _amount);
+    }
+
+    function _updateCurrentPeriod() internal {
+        require(periods.length >= 1);
+        for (uint i = 0; i < periods.length; i++) {
+            if (periods[i] <= now && i >= currentPeriod) {
+                currentPeriod = i;
+            }
+        }
+    }
+}
+
+contract Partners is Basic{
+    function Partners(address _contractAddress) Basic(_contractAddress) public {
+        periods = [
+            now + 61 days
+        ];
+        ownerWithdrawalDate = now + 91 days;
+    }
+}

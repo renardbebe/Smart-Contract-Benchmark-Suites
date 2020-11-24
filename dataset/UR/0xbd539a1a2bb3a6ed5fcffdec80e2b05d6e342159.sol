@@ -1,0 +1,1531 @@
+ 
+
+pragma solidity ^0.4.23;
+
+ 
+
+contract TokenSale {
+     
+    function buyTokens(address beneficiary) public payable;
+}
+
+ 
+
+ 
+contract WhitelistableConstraints {
+
+     
+    function isAllowedWhitelist(uint256 _maxWhitelistLength, uint256 _weiWhitelistThresholdBalance)
+        public pure returns(bool isReallyAllowedWhitelist) {
+        return _maxWhitelistLength > 0 || _weiWhitelistThresholdBalance > 0;
+    }
+}
+
+ 
+
+ 
+contract Whitelistable is WhitelistableConstraints {
+
+    event LogMaxWhitelistLengthChanged(address indexed caller, uint256 indexed maxWhitelistLength);
+    event LogWhitelistThresholdBalanceChanged(address indexed caller, uint256 indexed whitelistThresholdBalance);
+    event LogWhitelistAddressAdded(address indexed caller, address indexed subscriber);
+    event LogWhitelistAddressRemoved(address indexed caller, address indexed subscriber);
+
+    mapping (address => bool) public whitelist;
+
+    uint256 public whitelistLength;
+
+    uint256 public maxWhitelistLength;
+
+    uint256 public whitelistThresholdBalance;
+
+    constructor(uint256 _maxWhitelistLength, uint256 _whitelistThresholdBalance) internal {
+        require(isAllowedWhitelist(_maxWhitelistLength, _whitelistThresholdBalance), "parameters not allowed");
+
+        maxWhitelistLength = _maxWhitelistLength;
+        whitelistThresholdBalance = _whitelistThresholdBalance;
+    }
+
+     
+    function isWhitelistEnabled() public view returns(bool isReallyWhitelistEnabled) {
+        return maxWhitelistLength > 0;
+    }
+
+     
+    function isWhitelisted(address _subscriber) public view returns(bool isReallyWhitelisted) {
+        return whitelist[_subscriber];
+    }
+
+    function setMaxWhitelistLengthInternal(uint256 _maxWhitelistLength) internal {
+        require(isAllowedWhitelist(_maxWhitelistLength, whitelistThresholdBalance),
+            "_maxWhitelistLength not allowed");
+        require(_maxWhitelistLength != maxWhitelistLength, "_maxWhitelistLength equal to current one");
+
+        maxWhitelistLength = _maxWhitelistLength;
+
+        emit LogMaxWhitelistLengthChanged(msg.sender, maxWhitelistLength);
+    }
+
+    function setWhitelistThresholdBalanceInternal(uint256 _whitelistThresholdBalance) internal {
+        require(isAllowedWhitelist(maxWhitelistLength, _whitelistThresholdBalance),
+            "_whitelistThresholdBalance not allowed");
+        require(whitelistLength == 0 || _whitelistThresholdBalance > whitelistThresholdBalance,
+            "_whitelistThresholdBalance not greater than current one");
+
+        whitelistThresholdBalance = _whitelistThresholdBalance;
+
+        emit LogWhitelistThresholdBalanceChanged(msg.sender, _whitelistThresholdBalance);
+    }
+
+    function addToWhitelistInternal(address _subscriber) internal {
+        require(_subscriber != address(0), "_subscriber is zero");
+        require(!whitelist[_subscriber], "already whitelisted");
+        require(whitelistLength < maxWhitelistLength, "max whitelist length reached");
+
+        whitelistLength++;
+
+        whitelist[_subscriber] = true;
+
+        emit LogWhitelistAddressAdded(msg.sender, _subscriber);
+    }
+
+    function removeFromWhitelistInternal(address _subscriber, uint256 _balance) internal {
+        require(_subscriber != address(0), "_subscriber is zero");
+        require(whitelist[_subscriber], "not whitelisted");
+        require(_balance <= whitelistThresholdBalance, "_balance greater than whitelist threshold");
+
+        assert(whitelistLength > 0);
+
+        whitelistLength--;
+
+        whitelist[_subscriber] = false;
+
+        emit LogWhitelistAddressRemoved(msg.sender, _subscriber);
+    }
+
+     
+    function isAllowedBalance(address _subscriber, uint256 _balance) public view returns(bool isReallyAllowed) {
+        return !isWhitelistEnabled() || _balance <= whitelistThresholdBalance || whitelist[_subscriber];
+    }
+}
+
+ 
+
+ 
+library AddressUtils {
+
+   
+  function isContract(address addr) internal view returns (bool) {
+    uint256 size;
+     
+     
+     
+     
+     
+     
+     
+    assembly { size := extcodesize(addr) }
+    return size > 0;
+  }
+
+}
+
+ 
+
+ 
+contract Ownable {
+  address public owner;
+
+
+  event OwnershipRenounced(address indexed previousOwner);
+  event OwnershipTransferred(
+    address indexed previousOwner,
+    address indexed newOwner
+  );
+
+
+   
+  constructor() public {
+    owner = msg.sender;
+  }
+
+   
+  modifier onlyOwner() {
+    require(msg.sender == owner);
+    _;
+  }
+
+   
+  function renounceOwnership() public onlyOwner {
+    emit OwnershipRenounced(owner);
+    owner = address(0);
+  }
+
+   
+  function transferOwnership(address _newOwner) public onlyOwner {
+    _transferOwnership(_newOwner);
+  }
+
+   
+  function _transferOwnership(address _newOwner) internal {
+    require(_newOwner != address(0));
+    emit OwnershipTransferred(owner, _newOwner);
+    owner = _newOwner;
+  }
+}
+
+ 
+
+ 
+contract Pausable is Ownable {
+  event Pause();
+  event Unpause();
+
+  bool public paused = false;
+
+
+   
+  modifier whenNotPaused() {
+    require(!paused);
+    _;
+  }
+
+   
+  modifier whenPaused() {
+    require(paused);
+    _;
+  }
+
+   
+  function pause() onlyOwner whenNotPaused public {
+    paused = true;
+    emit Pause();
+  }
+
+   
+  function unpause() onlyOwner whenPaused public {
+    paused = false;
+    emit Unpause();
+  }
+}
+
+ 
+
+ 
+library SafeMath {
+
+   
+  function mul(uint256 a, uint256 b) internal pure returns (uint256 c) {
+     
+     
+     
+    if (a == 0) {
+      return 0;
+    }
+
+    c = a * b;
+    assert(c / a == b);
+    return c;
+  }
+
+   
+  function div(uint256 a, uint256 b) internal pure returns (uint256) {
+     
+     
+     
+    return a / b;
+  }
+
+   
+  function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+    assert(b <= a);
+    return a - b;
+  }
+
+   
+  function add(uint256 a, uint256 b) internal pure returns (uint256 c) {
+    c = a + b;
+    assert(c >= a);
+    return c;
+  }
+}
+
+ 
+
+ 
+contract ERC20Basic {
+  function totalSupply() public view returns (uint256);
+  function balanceOf(address who) public view returns (uint256);
+  function transfer(address to, uint256 value) public returns (bool);
+  event Transfer(address indexed from, address indexed to, uint256 value);
+}
+
+ 
+
+ 
+contract BasicToken is ERC20Basic {
+  using SafeMath for uint256;
+
+  mapping(address => uint256) balances;
+
+  uint256 totalSupply_;
+
+   
+  function totalSupply() public view returns (uint256) {
+    return totalSupply_;
+  }
+
+   
+  function transfer(address _to, uint256 _value) public returns (bool) {
+    require(_to != address(0));
+    require(_value <= balances[msg.sender]);
+
+    balances[msg.sender] = balances[msg.sender].sub(_value);
+    balances[_to] = balances[_to].add(_value);
+    emit Transfer(msg.sender, _to, _value);
+    return true;
+  }
+
+   
+  function balanceOf(address _owner) public view returns (uint256) {
+    return balances[_owner];
+  }
+
+}
+
+ 
+
+ 
+contract ERC20 is ERC20Basic {
+  function allowance(address owner, address spender)
+    public view returns (uint256);
+
+  function transferFrom(address from, address to, uint256 value)
+    public returns (bool);
+
+  function approve(address spender, uint256 value) public returns (bool);
+  event Approval(
+    address indexed owner,
+    address indexed spender,
+    uint256 value
+  );
+}
+
+ 
+
+ 
+contract StandardToken is ERC20, BasicToken {
+
+  mapping (address => mapping (address => uint256)) internal allowed;
+
+
+   
+  function transferFrom(
+    address _from,
+    address _to,
+    uint256 _value
+  )
+    public
+    returns (bool)
+  {
+    require(_to != address(0));
+    require(_value <= balances[_from]);
+    require(_value <= allowed[_from][msg.sender]);
+
+    balances[_from] = balances[_from].sub(_value);
+    balances[_to] = balances[_to].add(_value);
+    allowed[_from][msg.sender] = allowed[_from][msg.sender].sub(_value);
+    emit Transfer(_from, _to, _value);
+    return true;
+  }
+
+   
+  function approve(address _spender, uint256 _value) public returns (bool) {
+    allowed[msg.sender][_spender] = _value;
+    emit Approval(msg.sender, _spender, _value);
+    return true;
+  }
+
+   
+  function allowance(
+    address _owner,
+    address _spender
+   )
+    public
+    view
+    returns (uint256)
+  {
+    return allowed[_owner][_spender];
+  }
+
+   
+  function increaseApproval(
+    address _spender,
+    uint _addedValue
+  )
+    public
+    returns (bool)
+  {
+    allowed[msg.sender][_spender] = (
+      allowed[msg.sender][_spender].add(_addedValue));
+    emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+    return true;
+  }
+
+   
+  function decreaseApproval(
+    address _spender,
+    uint _subtractedValue
+  )
+    public
+    returns (bool)
+  {
+    uint oldValue = allowed[msg.sender][_spender];
+    if (_subtractedValue > oldValue) {
+      allowed[msg.sender][_spender] = 0;
+    } else {
+      allowed[msg.sender][_spender] = oldValue.sub(_subtractedValue);
+    }
+    emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+    return true;
+  }
+
+}
+
+ 
+
+ 
+contract MintableToken is StandardToken, Ownable {
+  event Mint(address indexed to, uint256 amount);
+  event MintFinished();
+
+  bool public mintingFinished = false;
+
+
+  modifier canMint() {
+    require(!mintingFinished);
+    _;
+  }
+
+  modifier hasMintPermission() {
+    require(msg.sender == owner);
+    _;
+  }
+
+   
+  function mint(
+    address _to,
+    uint256 _amount
+  )
+    hasMintPermission
+    canMint
+    public
+    returns (bool)
+  {
+    totalSupply_ = totalSupply_.add(_amount);
+    balances[_to] = balances[_to].add(_amount);
+    emit Mint(_to, _amount);
+    emit Transfer(address(0), _to, _amount);
+    return true;
+  }
+
+   
+  function finishMinting() onlyOwner canMint public returns (bool) {
+    mintingFinished = true;
+    emit MintFinished();
+    return true;
+  }
+}
+
+ 
+
+ 
+contract Crowdsale is TokenSale, Pausable, Whitelistable {
+    using AddressUtils for address;
+    using SafeMath for uint256;
+
+    event LogStartBlockChanged(uint256 indexed startBlock);
+    event LogEndBlockChanged(uint256 indexed endBlock);
+    event LogMinDepositChanged(uint256 indexed minDeposit);
+    event LogTokenPurchase(address indexed purchaser, address indexed beneficiary, uint256 indexed amount, uint256 tokenAmount);
+
+     
+    MintableToken public token;
+
+     
+    uint256 public startBlock;
+    uint256 public endBlock;
+
+     
+    uint256 public rate;
+
+     
+    uint256 public raisedFunds;
+
+     
+    uint256 public soldTokens;
+
+     
+    mapping (address => uint256) public balanceOf;
+
+     
+    uint256 public minDeposit;
+
+    modifier beforeStart() {
+        require(block.number < startBlock, "already started");
+        _;
+    }
+
+    modifier beforeEnd() {
+        require(block.number <= endBlock, "already ended");
+        _;
+    }
+
+    constructor(
+        uint256 _startBlock,
+        uint256 _endBlock,
+        uint256 _rate,
+        uint256 _minDeposit,
+        uint256 maxWhitelistLength,
+        uint256 whitelistThreshold
+    )
+    Whitelistable(maxWhitelistLength, whitelistThreshold) internal
+    {
+        require(_startBlock >= block.number, "_startBlock is lower than current block.number");
+        require(_endBlock >= _startBlock, "_endBlock is lower than _startBlock");
+        require(_rate > 0, "_rate is zero");
+        require(_minDeposit > 0, "_minDeposit is zero");
+
+        startBlock = _startBlock;
+        endBlock = _endBlock;
+        rate = _rate;
+        minDeposit = _minDeposit;
+    }
+
+     
+    function hasStarted() public view returns (bool started) {
+        return block.number >= startBlock;
+    }
+
+     
+    function hasEnded() public view returns (bool ended) {
+        return block.number > endBlock;
+    }
+
+     
+    function setStartBlock(uint256 _startBlock) external onlyOwner beforeStart {
+        require(_startBlock >= block.number, "_startBlock < current block");
+        require(_startBlock <= endBlock, "_startBlock > endBlock");
+        require(_startBlock != startBlock, "_startBlock == startBlock");
+
+        startBlock = _startBlock;
+
+        emit LogStartBlockChanged(_startBlock);
+    }
+
+     
+    function setEndBlock(uint256 _endBlock) external onlyOwner beforeEnd {
+        require(_endBlock >= block.number, "_endBlock < current block");
+        require(_endBlock >= startBlock, "_endBlock < startBlock");
+        require(_endBlock != endBlock, "_endBlock == endBlock");
+
+        endBlock = _endBlock;
+
+        emit LogEndBlockChanged(_endBlock);
+    }
+
+     
+    function setMinDeposit(uint256 _minDeposit) external onlyOwner beforeEnd {
+        require(0 < _minDeposit && _minDeposit < minDeposit, "_minDeposit is not in [0, minDeposit]");
+
+        minDeposit = _minDeposit;
+
+        emit LogMinDepositChanged(minDeposit);
+    }
+
+     
+    function setMaxWhitelistLength(uint256 maxWhitelistLength) external onlyOwner beforeEnd {
+        setMaxWhitelistLengthInternal(maxWhitelistLength);
+    }
+
+     
+    function setWhitelistThresholdBalance(uint256 whitelistThreshold) external onlyOwner beforeEnd {
+        setWhitelistThresholdBalanceInternal(whitelistThreshold);
+    }
+
+     
+    function addToWhitelist(address subscriber) external onlyOwner beforeEnd {
+        addToWhitelistInternal(subscriber);
+    }
+
+     
+    function removeFromWhitelist(address subscriber) external onlyOwner beforeEnd {
+        removeFromWhitelistInternal(subscriber, balanceOf[subscriber]);
+    }
+
+     
+    function () external payable whenNotPaused {
+        buyTokens(msg.sender);
+    }
+
+     
+    function buyTokens(address beneficiary) public payable whenNotPaused {
+        require(beneficiary != address(0), "beneficiary is zero");
+        require(isValidPurchase(beneficiary), "invalid purchase by beneficiary");
+
+        balanceOf[beneficiary] = balanceOf[beneficiary].add(msg.value);
+
+        raisedFunds = raisedFunds.add(msg.value);
+
+        uint256 tokenAmount = calculateTokens(msg.value);
+
+        soldTokens = soldTokens.add(tokenAmount);
+
+        distributeTokens(beneficiary, tokenAmount);
+
+        emit LogTokenPurchase(msg.sender, beneficiary, msg.value, tokenAmount);
+
+        forwardFunds(msg.value);
+    }
+
+     
+    function isAllowedBalance(address beneficiary, uint256 balance) public view returns (bool isReallyAllowed) {
+        bool hasMinimumBalance = balance >= minDeposit;
+        return hasMinimumBalance && super.isAllowedBalance(beneficiary, balance);
+    }
+
+     
+    function isValidPurchase(address beneficiary) internal view returns (bool isValid) {
+        bool withinPeriod = startBlock <= block.number && block.number <= endBlock;
+        bool nonZeroPurchase = msg.value != 0;
+        bool isValidBalance = isAllowedBalance(beneficiary, balanceOf[beneficiary].add(msg.value));
+
+        return withinPeriod && nonZeroPurchase && isValidBalance;
+    }
+
+     
+     
+    function calculateTokens(uint256 amount) internal view returns (uint256 tokenAmount) {
+        return amount.mul(rate);
+    }
+
+     
+    function distributeTokens(address beneficiary, uint256 tokenAmount) internal {
+        token.mint(beneficiary, tokenAmount);
+    }
+
+     
+     
+    function forwardFunds(uint256 amount) internal;
+}
+
+ 
+
+ 
+contract NokuPricingPlan {
+     
+    function payFee(bytes32 serviceName, uint256 multiplier, address client) public returns(bool paid);
+
+     
+    function usageFee(bytes32 serviceName, uint256 multiplier) public view returns(uint fee);
+}
+
+ 
+
+contract NokuCustomToken is Ownable {
+
+    event LogBurnFinished();
+    event LogPricingPlanChanged(address indexed caller, address indexed pricingPlan);
+
+     
+    NokuPricingPlan public pricingPlan;
+
+     
+    address public serviceProvider;
+
+     
+    bool public burningFinished;
+
+     
+    modifier onlyServiceProvider() {
+        require(msg.sender == serviceProvider, "caller is not service provider");
+        _;
+    }
+
+    modifier canBurn() {
+        require(!burningFinished, "burning finished");
+        _;
+    }
+
+    constructor(address _pricingPlan, address _serviceProvider) internal {
+        require(_pricingPlan != 0, "_pricingPlan is zero");
+        require(_serviceProvider != 0, "_serviceProvider is zero");
+
+        pricingPlan = NokuPricingPlan(_pricingPlan);
+        serviceProvider = _serviceProvider;
+    }
+
+     
+    function isCustomToken() public pure returns(bool isCustom) {
+        return true;
+    }
+
+     
+    function finishBurning() public onlyOwner canBurn returns(bool finished) {
+        burningFinished = true;
+
+        emit LogBurnFinished();
+
+        return true;
+    }
+
+     
+    function setPricingPlan(address _pricingPlan) public onlyServiceProvider {
+        require(_pricingPlan != 0, "_pricingPlan is 0");
+        require(_pricingPlan != address(pricingPlan), "_pricingPlan == pricingPlan");
+
+        pricingPlan = NokuPricingPlan(_pricingPlan);
+
+        emit LogPricingPlanChanged(msg.sender, _pricingPlan);
+    }
+}
+
+ 
+
+contract BurnableERC20 is ERC20 {
+    function burn(uint256 amount) public returns (bool burned);
+}
+
+ 
+contract NokuTokenBurner is Pausable {
+    using SafeMath for uint256;
+
+    event LogNokuTokenBurnerCreated(address indexed caller, address indexed wallet);
+    event LogBurningPercentageChanged(address indexed caller, uint256 indexed burningPercentage);
+
+     
+    address public wallet;
+
+     
+    uint256 public burningPercentage;
+
+     
+    uint256 public burnedTokens;
+
+     
+    uint256 public transferredTokens;
+
+     
+    constructor(address _wallet) public {
+        require(_wallet != address(0), "_wallet is zero");
+        
+        wallet = _wallet;
+        burningPercentage = 100;
+
+        emit LogNokuTokenBurnerCreated(msg.sender, _wallet);
+    }
+
+     
+    function setBurningPercentage(uint256 _burningPercentage) public onlyOwner {
+        require(0 <= _burningPercentage && _burningPercentage <= 100, "_burningPercentage not in [0, 100]");
+        require(_burningPercentage != burningPercentage, "_burningPercentage equal to current one");
+        
+        burningPercentage = _burningPercentage;
+
+        emit LogBurningPercentageChanged(msg.sender, _burningPercentage);
+    }
+
+     
+    function tokenReceived(address _token, uint256 _amount) public whenNotPaused {
+        require(_token != address(0), "_token is zero");
+        require(_amount > 0, "_amount is zero");
+
+        uint256 amountToBurn = _amount.mul(burningPercentage).div(100);
+        if (amountToBurn > 0) {
+            assert(BurnableERC20(_token).burn(amountToBurn));
+            
+            burnedTokens = burnedTokens.add(amountToBurn);
+        }
+
+        uint256 amountToTransfer = _amount.sub(amountToBurn);
+        if (amountToTransfer > 0) {
+            assert(BurnableERC20(_token).transfer(wallet, amountToTransfer));
+
+            transferredTokens = transferredTokens.add(amountToTransfer);
+        }
+    }
+}
+
+ 
+
+ 
+contract BurnableToken is BasicToken {
+
+  event Burn(address indexed burner, uint256 value);
+
+   
+  function burn(uint256 _value) public {
+    _burn(msg.sender, _value);
+  }
+
+  function _burn(address _who, uint256 _value) internal {
+    require(_value <= balances[_who]);
+     
+     
+
+    balances[_who] = balances[_who].sub(_value);
+    totalSupply_ = totalSupply_.sub(_value);
+    emit Burn(_who, _value);
+    emit Transfer(_who, address(0), _value);
+  }
+}
+
+ 
+
+ 
+contract DetailedERC20 is ERC20 {
+  string public name;
+  string public symbol;
+  uint8 public decimals;
+
+  constructor(string _name, string _symbol, uint8 _decimals) public {
+    name = _name;
+    symbol = _symbol;
+    decimals = _decimals;
+  }
+}
+
+ 
+
+ 
+library SafeERC20 {
+  function safeTransfer(ERC20Basic token, address to, uint256 value) internal {
+    require(token.transfer(to, value));
+  }
+
+  function safeTransferFrom(
+    ERC20 token,
+    address from,
+    address to,
+    uint256 value
+  )
+    internal
+  {
+    require(token.transferFrom(from, to, value));
+  }
+
+  function safeApprove(ERC20 token, address spender, uint256 value) internal {
+    require(token.approve(spender, value));
+  }
+}
+
+ 
+
+ 
+contract TokenTimelock {
+  using SafeERC20 for ERC20Basic;
+
+   
+  ERC20Basic public token;
+
+   
+  address public beneficiary;
+
+   
+  uint256 public releaseTime;
+
+  constructor(
+    ERC20Basic _token,
+    address _beneficiary,
+    uint256 _releaseTime
+  )
+    public
+  {
+     
+    require(_releaseTime > block.timestamp);
+    token = _token;
+    beneficiary = _beneficiary;
+    releaseTime = _releaseTime;
+  }
+
+   
+  function release() public {
+     
+    require(block.timestamp >= releaseTime);
+
+    uint256 amount = token.balanceOf(this);
+    require(amount > 0);
+
+    token.safeTransfer(beneficiary, amount);
+  }
+}
+
+ 
+
+ 
+
+pragma solidity ^0.4.23;
+
+
+
+
+
+
+ 
+contract TokenVesting is Ownable {
+  using SafeMath for uint256;
+  using SafeERC20 for ERC20Basic;
+
+  event Released(uint256 amount);
+  event Revoked();
+
+   
+  address public beneficiary;
+
+  uint256 public cliff;
+  uint256 public start;
+  uint256 public duration;
+
+  bool public revocable;
+
+  mapping (address => uint256) public released;
+  mapping (address => bool) public revoked;
+
+   
+  constructor(
+    address _beneficiary,
+    uint256 _start,
+    uint256 _cliff,
+    uint256 _duration,
+    bool _revocable
+  )
+    public
+  {
+    require(_beneficiary != address(0));
+    require(_cliff <= _duration);
+
+    beneficiary = _beneficiary;
+    revocable = _revocable;
+    duration = _duration;
+    cliff = _start.add(_cliff);
+    start = _start;
+  }
+
+   
+  function release(ERC20Basic token) public {
+    uint256 unreleased = releasableAmount(token);
+
+    require(unreleased > 0);
+
+    released[token] = released[token].add(unreleased);
+
+    token.safeTransfer(beneficiary, unreleased);
+
+    emit Released(unreleased);
+  }
+
+   
+  function revoke(ERC20Basic token) public onlyOwner {
+    require(revocable);
+    require(!revoked[token]);
+
+    uint256 balance = token.balanceOf(this);
+
+    uint256 unreleased = releasableAmount(token);
+    uint256 refund = balance.sub(unreleased);
+
+    revoked[token] = true;
+
+    token.safeTransfer(owner, refund);
+
+    emit Revoked();
+  }
+
+   
+  function releasableAmount(ERC20Basic token) public view returns (uint256) {
+    return vestedAmount(token).sub(released[token]);
+  }
+
+   
+  function vestedAmount(ERC20Basic token) public view returns (uint256) {
+    uint256 currentBalance = token.balanceOf(this);
+    uint256 totalBalance = currentBalance.add(released[token]);
+
+    if (block.timestamp < cliff) {
+      return 0;
+    } else if (block.timestamp >= start.add(duration) || revoked[token]) {
+      return totalBalance;
+    } else {
+      return totalBalance.mul(block.timestamp.sub(start)).div(duration);
+    }
+  }
+}
+
+ 
+
+ 
+contract NokuCustomERC20 is NokuCustomToken, DetailedERC20, MintableToken, BurnableToken {
+    using SafeMath for uint256;
+
+    event LogNokuCustomERC20Created(
+        address indexed caller,
+        string indexed name,
+        string indexed symbol,
+        uint8 decimals,
+        uint256 transferableFromBlock,
+        uint256 lockEndBlock,
+        address pricingPlan,
+        address serviceProvider
+    );
+    event LogMintingFeeEnabledChanged(address indexed caller, bool indexed mintingFeeEnabled);
+    event LogInformationChanged(address indexed caller, string name, string symbol);
+    event LogTransferFeePaymentFinished(address indexed caller);
+    event LogTransferFeePercentageChanged(address indexed caller, uint256 indexed transferFeePercentage);
+
+     
+    bool public mintingFeeEnabled;
+
+     
+    uint256 public transferableFromBlock;
+
+     
+    uint256 public lockEndBlock;
+
+     
+    mapping (address => uint256) public initiallyLockedBalanceOf;
+
+     
+    uint256 public transferFeePercentage;
+
+     
+    bool public transferFeePaymentFinished;
+
+     
+    TokenTimelock public timelock;
+
+     
+    TokenVesting public vesting;
+
+    bytes32 public constant BURN_SERVICE_NAME     = "NokuCustomERC20.burn";
+    bytes32 public constant MINT_SERVICE_NAME     = "NokuCustomERC20.mint";
+    bytes32 public constant TIMELOCK_SERVICE_NAME = "NokuCustomERC20.timelock";
+    bytes32 public constant VESTING_SERVICE_NAME  = "NokuCustomERC20.vesting";
+
+    modifier canTransfer(address _from, uint _value) {
+        require(block.number >= transferableFromBlock, "token not transferable");
+
+        if (block.number < lockEndBlock) {
+            uint256 locked = lockedBalanceOf(_from);
+            if (locked > 0) {
+                uint256 newBalance = balanceOf(_from).sub(_value);
+                require(newBalance >= locked, "_value exceeds locked amount");
+            }
+        }
+        _;
+    }
+
+    constructor(
+        string _name,
+        string _symbol,
+        uint8 _decimals,
+        uint256 _transferableFromBlock,
+        uint256 _lockEndBlock,
+        address _pricingPlan,
+        address _serviceProvider
+    )
+    NokuCustomToken(_pricingPlan, _serviceProvider)
+    DetailedERC20(_name, _symbol, _decimals) public
+    {
+        require(bytes(_name).length > 0, "_name is empty");
+        require(bytes(_symbol).length > 0, "_symbol is empty");
+        require(_lockEndBlock >= _transferableFromBlock, "_lockEndBlock lower than _transferableFromBlock");
+
+        transferableFromBlock = _transferableFromBlock;
+        lockEndBlock = _lockEndBlock;
+        mintingFeeEnabled = true;
+
+        emit LogNokuCustomERC20Created(
+            msg.sender,
+            _name,
+            _symbol,
+            _decimals,
+            _transferableFromBlock,
+            _lockEndBlock,
+            _pricingPlan,
+            _serviceProvider
+        );
+    }
+
+    function setMintingFeeEnabled(bool _mintingFeeEnabled) public onlyOwner returns(bool successful) {
+        require(_mintingFeeEnabled != mintingFeeEnabled, "_mintingFeeEnabled == mintingFeeEnabled");
+
+        mintingFeeEnabled = _mintingFeeEnabled;
+
+        emit LogMintingFeeEnabledChanged(msg.sender, _mintingFeeEnabled);
+
+        return true;
+    }
+
+     
+    function setInformation(string _name, string _symbol) public onlyOwner returns(bool successful) {
+        require(bytes(_name).length > 0, "_name is empty");
+        require(bytes(_symbol).length > 0, "_symbol is empty");
+
+        name = _name;
+        symbol = _symbol;
+
+        emit LogInformationChanged(msg.sender, _name, _symbol);
+
+        return true;
+    }
+
+     
+    function finishTransferFeePayment() public onlyOwner returns(bool finished) {
+        require(!transferFeePaymentFinished, "transfer fee finished");
+
+        transferFeePaymentFinished = true;
+
+        emit LogTransferFeePaymentFinished(msg.sender);
+
+        return true;
+    }
+
+     
+    function setTransferFeePercentage(uint256 _transferFeePercentage) public onlyOwner {
+        require(0 <= _transferFeePercentage && _transferFeePercentage <= 100, "_transferFeePercentage not in [0, 100]");
+        require(_transferFeePercentage != transferFeePercentage, "_transferFeePercentage equal to current value");
+
+        transferFeePercentage = _transferFeePercentage;
+
+        emit LogTransferFeePercentageChanged(msg.sender, _transferFeePercentage);
+    }
+
+    function lockedBalanceOf(address _to) public view returns(uint256 locked) {
+        uint256 initiallyLocked = initiallyLockedBalanceOf[_to];
+        if (block.number >= lockEndBlock) return 0;
+        else if (block.number <= transferableFromBlock) return initiallyLocked;
+
+        uint256 releaseForBlock = initiallyLocked.div(lockEndBlock.sub(transferableFromBlock));
+        uint256 released = block.number.sub(transferableFromBlock).mul(releaseForBlock);
+        return initiallyLocked.sub(released);
+    }
+
+     
+    function transferFee(uint256 _value) public view returns(uint256 usageFee) {
+        return _value.mul(transferFeePercentage).div(100);
+    }
+
+     
+    function freeTransfer() public view returns (bool isTransferFree) {
+        return transferFeePaymentFinished || transferFeePercentage == 0;
+    }
+
+     
+    function transfer(address _to, uint256 _value) canTransfer(msg.sender, _value) public returns(bool transferred) {
+        if (freeTransfer()) {
+            return super.transfer(_to, _value);
+        }
+        else {
+            uint256 usageFee = transferFee(_value);
+            uint256 netValue = _value.sub(usageFee);
+
+            bool feeTransferred = super.transfer(owner, usageFee);
+            bool netValueTransferred = super.transfer(_to, netValue);
+
+            return feeTransferred && netValueTransferred;
+        }
+    }
+
+     
+    function transferFrom(address _from, address _to, uint256 _value) canTransfer(_from, _value) public returns(bool transferred) {
+        if (freeTransfer()) {
+            return super.transferFrom(_from, _to, _value);
+        }
+        else {
+            uint256 usageFee = transferFee(_value);
+            uint256 netValue = _value.sub(usageFee);
+
+            bool feeTransferred = super.transferFrom(_from, owner, usageFee);
+            bool netValueTransferred = super.transferFrom(_from, _to, netValue);
+
+            return feeTransferred && netValueTransferred;
+        }
+    }
+
+     
+    function burn(uint256 _amount) public canBurn {
+        require(_amount > 0, "_amount is zero");
+
+        super.burn(_amount);
+
+        require(pricingPlan.payFee(BURN_SERVICE_NAME, _amount, msg.sender), "burn fee failed");
+    }
+
+     
+    function mint(address _to, uint256 _amount) public onlyOwner canMint returns(bool minted) {
+        require(_to != 0, "_to is zero");
+        require(_amount > 0, "_amount is zero");
+
+        super.mint(_to, _amount);
+
+        if (mintingFeeEnabled) {
+            require(pricingPlan.payFee(MINT_SERVICE_NAME, _amount, msg.sender), "mint fee failed");
+        }
+
+        return true;
+    }
+
+     
+    function mintLocked(address _to, uint256 _amount) public onlyOwner canMint returns(bool minted) {
+        initiallyLockedBalanceOf[_to] = initiallyLockedBalanceOf[_to].add(_amount);
+
+        return mint(_to, _amount);
+    }
+
+     
+    function mintTimelocked(address _to, uint256 _amount, uint256 _releaseTime) public onlyOwner canMint
+    returns(bool minted)
+    {
+        require(timelock == address(0), "TokenTimelock already activated");
+
+        timelock = new TokenTimelock(this, _to, _releaseTime);
+
+        minted = mint(timelock, _amount);
+
+        require(pricingPlan.payFee(TIMELOCK_SERVICE_NAME, _amount, msg.sender), "timelock fee failed");
+    }
+
+     
+    function mintVested(address _to, uint256 _amount, uint256 _startTime, uint256 _duration) public onlyOwner canMint
+    returns(bool minted)
+    {
+        require(vesting == address(0), "TokenVesting already activated");
+
+        vesting = new TokenVesting(_to, _startTime, 0, _duration, true);
+
+        minted = mint(vesting, _amount);
+
+        require(pricingPlan.payFee(VESTING_SERVICE_NAME, _amount, msg.sender), "vesting fee failed");
+    }
+
+     
+    function releaseVested() public returns(bool released) {
+        require(vesting != address(0), "TokenVesting not activated");
+
+        vesting.release(this);
+
+        return true;
+    }
+
+     
+    function revokeVested() public onlyOwner returns(bool revoked) {
+        require(vesting != address(0), "TokenVesting not activated");
+
+        vesting.revoke(this);
+
+        return true;
+    }
+}
+
+ 
+
+ 
+contract TokenCappedCrowdsale is Crowdsale {
+    using SafeMath for uint256;
+
+     
+    uint256 public tokenCap;
+
+     
+     
+    function hasEnded() public view returns (bool) {
+        bool capReached = soldTokens >= tokenCap;
+        return super.hasEnded() || capReached;
+    }
+
+     
+     
+    function isValidPurchase(address beneficiary) internal view returns (bool isValid) {
+        uint256 tokenAmount = calculateTokens(msg.value);
+        bool withinCap = soldTokens.add(tokenAmount) <= tokenCap;
+        return withinCap && super.isValidPurchase(beneficiary);
+    }
+}
+
+ 
+
+ 
+contract NokuCustomCrowdsale is TokenCappedCrowdsale {
+    using AddressUtils for address;
+    using SafeMath for uint256;
+
+    event LogNokuCustomCrowdsaleCreated(
+        address sender,
+        uint256 indexed startBlock,
+        uint256 indexed endBlock,
+        address indexed wallet
+    );
+    event LogThreePowerAgesChanged(
+        address indexed sender,
+        uint256 indexed platinumAgeEndBlock,
+        uint256 indexed goldenAgeEndBlock,
+        uint256 silverAgeEndBlock,
+        uint256 platinumAgeRate,
+        uint256 goldenAgeRate,
+        uint256 silverAgeRate
+    );
+    event LogTwoPowerAgesChanged(
+        address indexed sender,
+        uint256 indexed platinumAgeEndBlock,
+        uint256 indexed goldenAgeEndBlock,
+        uint256 platinumAgeRate,
+        uint256 goldenAgeRate
+    );
+    event LogOnePowerAgeChanged(address indexed sender, uint256 indexed platinumAgeEndBlock, uint256 indexed platinumAgeRate);
+
+     
+    uint256 public platinumAgeEndBlock;
+
+     
+    uint256 public goldenAgeEndBlock;
+
+     
+    uint256 public silverAgeEndBlock;
+
+     
+    uint256 public platinumAgeRate;
+
+     
+    uint256 public goldenAgeRate;
+
+     
+    uint256 public silverAgeRate;
+
+     
+    address public wallet;
+
+    constructor(
+        uint256 _startBlock,
+        uint256 _endBlock,
+        uint256 _rate,
+        uint256 _minDeposit,
+        uint256 _maxWhitelistLength,
+        uint256 _whitelistThreshold,
+        address _token,
+        uint256 _tokenMaximumSupply,
+        address _wallet
+    )
+    Crowdsale(
+        _startBlock,
+        _endBlock,
+        _rate,
+        _minDeposit,
+        _maxWhitelistLength,
+        _whitelistThreshold
+    )
+    public {
+        require(_token.isContract(), "_token is not contract");
+        require(_tokenMaximumSupply > 0, "_tokenMaximumSupply is zero");
+
+        platinumAgeRate = _rate;
+        goldenAgeRate = _rate;
+        silverAgeRate = _rate;
+
+        token = NokuCustomERC20(_token);
+        wallet = _wallet;
+
+         
+        tokenCap = _tokenMaximumSupply.sub(token.totalSupply());
+
+        emit LogNokuCustomCrowdsaleCreated(msg.sender, startBlock, endBlock, _wallet);
+    }
+
+    function setThreePowerAges(
+        uint256 _platinumAgeEndBlock,
+        uint256 _goldenAgeEndBlock,
+        uint256 _silverAgeEndBlock,
+        uint256 _platinumAgeRate,
+        uint256 _goldenAgeRate,
+        uint256 _silverAgeRate
+    )
+    external onlyOwner beforeStart
+    {
+        require(startBlock < _platinumAgeEndBlock, "_platinumAgeEndBlock not greater than start block");
+        require(_platinumAgeEndBlock < _goldenAgeEndBlock, "_platinumAgeEndBlock not lower than _goldenAgeEndBlock");
+        require(_goldenAgeEndBlock < _silverAgeEndBlock, "_silverAgeEndBlock not greater than _goldenAgeEndBlock");
+        require(_silverAgeEndBlock <= endBlock, "_silverAgeEndBlock greater than end block");
+        require(_platinumAgeRate > _goldenAgeRate, "_platinumAgeRate not greater than _goldenAgeRate");
+        require(_goldenAgeRate > _silverAgeRate, "_goldenAgeRate not greater than _silverAgeRate");
+        require(_silverAgeRate > rate, "_silverAgeRate not greater than nominal rate");
+
+        platinumAgeEndBlock = _platinumAgeEndBlock;
+        goldenAgeEndBlock = _goldenAgeEndBlock;
+        silverAgeEndBlock = _silverAgeEndBlock;
+
+        platinumAgeRate = _platinumAgeRate;
+        goldenAgeRate = _goldenAgeRate;
+        silverAgeRate = _silverAgeRate;
+
+        emit LogThreePowerAgesChanged(
+            msg.sender,
+            _platinumAgeEndBlock,
+            _goldenAgeEndBlock,
+            _silverAgeEndBlock,
+            _platinumAgeRate,
+            _goldenAgeRate,
+            _silverAgeRate
+        );
+    }
+
+    function setTwoPowerAges(
+        uint256 _platinumAgeEndBlock,
+        uint256 _goldenAgeEndBlock,
+        uint256 _platinumAgeRate,
+        uint256 _goldenAgeRate
+    )
+    external onlyOwner beforeStart
+    {
+        require(startBlock < _platinumAgeEndBlock, "_platinumAgeEndBlock not greater than start block");
+        require(_platinumAgeEndBlock < _goldenAgeEndBlock, "_platinumAgeEndBlock not lower than _goldenAgeEndBlock");
+        require(_goldenAgeEndBlock <= endBlock, "_goldenAgeEndBlock greater than end block");
+        require(_platinumAgeRate > _goldenAgeRate, "_platinumAgeRate not greater than _goldenAgeRate");
+        require(_goldenAgeRate > rate, "_goldenAgeRate not greater than nominal rate");
+
+        platinumAgeEndBlock = _platinumAgeEndBlock;
+        goldenAgeEndBlock = _goldenAgeEndBlock;
+
+        platinumAgeRate = _platinumAgeRate;
+        goldenAgeRate = _goldenAgeRate;
+        silverAgeRate = rate;
+
+        emit LogTwoPowerAgesChanged(
+            msg.sender,
+            _platinumAgeEndBlock,
+            _goldenAgeEndBlock,
+            _platinumAgeRate,
+            _goldenAgeRate
+        );
+    }
+
+    function setOnePowerAge(uint256 _platinumAgeEndBlock, uint256 _platinumAgeRate)
+    external onlyOwner beforeStart
+    {
+        require(startBlock < _platinumAgeEndBlock, "_platinumAgeEndBlock not greater than start block");
+        require(_platinumAgeEndBlock <= endBlock, "_platinumAgeEndBlock greater than end block");
+        require(_platinumAgeRate > rate, "_platinumAgeRate not greater than nominal rate");
+
+        platinumAgeEndBlock = _platinumAgeEndBlock;
+
+        platinumAgeRate = _platinumAgeRate;
+        goldenAgeRate = rate;
+        silverAgeRate = rate;
+
+        emit LogOnePowerAgeChanged(msg.sender, _platinumAgeEndBlock, _platinumAgeRate);
+    }
+
+    function grantTokenOwnership(address _client) external onlyOwner returns(bool granted) {
+        require(!_client.isContract(), "_client is contract");
+        require(hasEnded(), "crowdsale not ended yet");
+
+         
+        token.transferOwnership(_client);
+
+        return true;
+    }
+
+     
+    function calculateTokens(uint256 amount) internal view returns(uint256 tokenAmount) {
+        uint256 conversionRate = block.number <= platinumAgeEndBlock ? platinumAgeRate :
+            block.number <= goldenAgeEndBlock ? goldenAgeRate :
+            block.number <= silverAgeEndBlock ? silverAgeRate :
+            rate;
+
+        return amount.mul(conversionRate);
+    }
+
+     
+    function distributeTokens(address beneficiary, uint256 tokenAmount) internal {
+        if (block.number <= platinumAgeEndBlock) {
+            NokuCustomERC20(token).mintLocked(beneficiary, tokenAmount);
+        }
+        else {
+            super.distributeTokens(beneficiary, tokenAmount);
+        }
+    }
+
+     
+    function forwardFunds(uint256 amount) internal {
+        wallet.transfer(amount);
+    }
+}
+
+ 
+
+contract NokuCustomService is Pausable {
+    using AddressUtils for address;
+
+    event LogPricingPlanChanged(address indexed caller, address indexed pricingPlan);
+
+     
+    NokuPricingPlan public pricingPlan;
+
+    constructor(address _pricingPlan) internal {
+        require(_pricingPlan.isContract(), "_pricingPlan is not contract");
+
+        pricingPlan = NokuPricingPlan(_pricingPlan);
+    }
+
+    function setPricingPlan(address _pricingPlan) public onlyOwner {
+        require(_pricingPlan.isContract(), "_pricingPlan is not contract");
+        require(NokuPricingPlan(_pricingPlan) != pricingPlan, "_pricingPlan equal to current");
+        
+        pricingPlan = NokuPricingPlan(_pricingPlan);
+
+        emit LogPricingPlanChanged(msg.sender, _pricingPlan);
+    }
+}
+
+ 
+
+ 
+contract NokuCustomCrowdsaleService is NokuCustomService {
+    event LogNokuCustomCrowdsaleServiceCreated(address indexed caller);
+
+    bytes32 public constant SERVICE_NAME = "NokuCustomERC20.crowdsale";
+    uint256 public constant CREATE_AMOUNT = 1 * 10**18;
+
+    constructor(address _pricingPlan) NokuCustomService(_pricingPlan) public {
+        emit LogNokuCustomCrowdsaleServiceCreated(msg.sender);
+    }
+
+    function createCustomCrowdsale(
+        uint256 _startBlock,
+        uint256 _endBlock,
+        uint256 _rate,
+        uint256 _minDeposit,
+        uint256 _maxWhitelistLength,
+        uint256 _whitelistThreshold,
+        address _token,
+        uint256 _tokenMaximumSupply,
+        address _wallet
+    )
+    public returns(NokuCustomCrowdsale customCrowdsale)
+    {
+        customCrowdsale = new NokuCustomCrowdsale(
+            _startBlock,
+            _endBlock,
+            _rate,
+            _minDeposit,
+            _maxWhitelistLength,
+            _whitelistThreshold,
+            _token,
+            _tokenMaximumSupply,
+            _wallet
+        );
+
+         
+        customCrowdsale.transferOwnership(msg.sender);
+
+        require(pricingPlan.payFee(SERVICE_NAME, CREATE_AMOUNT, msg.sender), "fee payment failed");
+    }
+}

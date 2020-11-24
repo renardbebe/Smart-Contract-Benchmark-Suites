@@ -1,0 +1,1381 @@
+ 
+
+pragma solidity ^0.4.24;
+
+
+contract ERC20Interface {
+    function name() public view returns(bytes32);
+    function symbol() public view returns(bytes32);
+    function balanceOf (address _owner) public view returns(uint256 balance);
+    function transfer(address _to, uint256 _value) public returns (bool success);
+    function transferFrom(address _from, address _to, uint256 _value) public returns (uint);
+    event Transfer(address indexed _from, address indexed _to, uint256 _value);
+}
+
+library ExtendedCampaignLibrary {
+    struct ExtendedInfo{
+        bytes32 bidId;
+        address rewardManager;
+        string endpoint;
+    }
+
+     
+    function setBidId(ExtendedInfo storage _extendedInfo, bytes32 _bidId) internal {
+        _extendedInfo.bidId = _bidId;
+    }
+    
+     
+    function getBidId(ExtendedInfo storage _extendedInfo) internal view returns(bytes32 _bidId){
+        return _extendedInfo.bidId;
+    }
+
+     
+    function setRewardManager(ExtendedInfo storage _extendedInfo,  address _rewardManager) internal {
+        _extendedInfo.rewardManager = _rewardManager;
+    }
+
+     
+    function getRewardManager(ExtendedInfo storage _extendedInfo) internal view returns(address _rewardManager) {
+        return _extendedInfo.rewardManager;
+    }
+
+     
+    function setEndpoint(ExtendedInfo storage _extendedInfo, string  _endpoint) internal {
+        _extendedInfo.endpoint = _endpoint;
+    }
+
+     
+    function getEndpoint(ExtendedInfo storage _extendedInfo) internal view returns (string _endpoint) {
+        return _extendedInfo.endpoint;
+    }
+}
+
+
+contract AppCoins is ERC20Interface{
+     
+    address public owner;
+    bytes32 private token_name;
+    bytes32 private token_symbol;
+    uint8 public decimals = 18;
+     
+    uint256 public totalSupply;
+
+     
+    mapping (address => uint256) public balances;
+    mapping (address => mapping (address => uint256)) public allowance;
+
+     
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+     
+    event Burn(address indexed from, uint256 value);
+
+     
+    function AppCoins() public {
+        owner = msg.sender;
+        token_name = "AppCoins";
+        token_symbol = "APPC";
+        uint256 _totalSupply = 1000000;
+        totalSupply = _totalSupply * 10 ** uint256(decimals);   
+        balances[owner] = totalSupply;                 
+    }
+
+    function name() public view returns(bytes32) {
+        return token_name;
+    }
+
+    function symbol() public view returns(bytes32) {
+        return token_symbol;
+    }
+
+    function balanceOf (address _owner) public view returns(uint256 balance) {
+        return balances[_owner];
+    }
+
+     
+    function _transfer(address _from, address _to, uint _value) internal returns (bool) {
+         
+        require(_to != 0x0);
+         
+        require(balances[_from] >= _value);
+         
+        require(balances[_to] + _value > balances[_to]);
+         
+        uint previousBalances = balances[_from] + balances[_to];
+         
+        balances[_from] -= _value;
+         
+        balances[_to] += _value;
+        emit Transfer(_from, _to, _value);
+         
+        assert(balances[_from] + balances[_to] == previousBalances);
+    }
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+    function transfer (address _to, uint256 _amount) public returns (bool success) {
+        if( balances[msg.sender] >= _amount && _amount > 0 && balances[_to] + _amount > balances[_to]) {
+
+            balances[msg.sender] -= _amount;
+            balances[_to] += _amount;
+            emit Transfer(msg.sender, _to, _amount);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+     
+    function transferFrom(address _from, address _to, uint256 _value) public returns (uint) {
+        require(_value <= allowance[_from][msg.sender]);      
+        allowance[_from][msg.sender] -= _value;
+        _transfer(_from, _to, _value);
+        return allowance[_from][msg.sender];
+    }
+
+     
+    function approve(address _spender, uint256 _value) public
+        returns (bool success) {
+        allowance[msg.sender][_spender] = _value;
+        return true;
+    }
+
+     
+    function burn(uint256 _value) public returns (bool success) {
+        require(balances[msg.sender] >= _value);    
+        balances[msg.sender] -= _value;             
+        totalSupply -= _value;                       
+        emit Burn(msg.sender, _value);
+        return true;
+    }
+
+     
+    function burnFrom(address _from, uint256 _value) public returns (bool success) {
+        require(balances[_from] >= _value);                 
+        require(_value <= allowance[_from][msg.sender]);     
+        balances[_from] -= _value;                          
+        allowance[_from][msg.sender] -= _value;              
+        totalSupply -= _value;                               
+        emit Burn(_from, _value);
+        return true;
+    }
+}
+library CampaignLibrary {
+
+    struct Campaign {
+        bytes32 bidId;
+        uint price;
+        uint budget;
+        uint startDate;
+        uint endDate;
+        bool valid;
+        address  owner;
+    }
+
+
+     
+    function setBidId(Campaign storage _campaign, bytes32 _bidId) internal {
+        _campaign.bidId = _bidId;
+    }
+
+     
+    function getBidId(Campaign storage _campaign) internal view returns(bytes32 _bidId){
+        return _campaign.bidId;
+    }
+   
+     
+    function setPrice(Campaign storage _campaign, uint _price) internal {
+        _campaign.price = _price;
+    }
+
+     
+    function getPrice(Campaign storage _campaign) internal view returns(uint _price){
+        return _campaign.price;
+    }
+
+     
+    function setBudget(Campaign storage _campaign, uint _budget) internal {
+        _campaign.budget = _budget;
+    }
+
+     
+    function getBudget(Campaign storage _campaign) internal view returns(uint _budget){
+        return _campaign.budget;
+    }
+
+     
+    function setStartDate(Campaign storage _campaign, uint _startDate) internal{
+        _campaign.startDate = _startDate;
+    }
+
+     
+    function getStartDate(Campaign storage _campaign) internal view returns(uint _startDate){
+        return _campaign.startDate;
+    }
+ 
+     
+    function setEndDate(Campaign storage _campaign, uint _endDate) internal {
+        _campaign.endDate = _endDate;
+    }
+
+     
+    function getEndDate(Campaign storage _campaign) internal view returns(uint _endDate){
+        return _campaign.endDate;
+    }
+
+     
+    function setValidity(Campaign storage _campaign, bool _valid) internal {
+        _campaign.valid = _valid;
+    }
+
+     
+    function getValidity(Campaign storage _campaign) internal view returns(bool _valid){
+        return _campaign.valid;
+    }
+
+     
+    function setOwner(Campaign storage _campaign, address _owner) internal {
+        _campaign.owner = _owner;
+    }
+
+     
+    function getOwner(Campaign storage _campaign) internal view returns(address _owner){
+        return _campaign.owner;
+    }
+
+     
+    function convertCountryIndexToBytes(uint[] countries) public pure
+        returns (uint countries1,uint countries2,uint countries3){
+        countries1 = 0;
+        countries2 = 0;
+        countries3 = 0;
+        for(uint i = 0; i < countries.length; i++){
+            uint index = countries[i];
+
+            if(index<256){
+                countries1 = countries1 | uint(1) << index;
+            } else if (index<512) {
+                countries2 = countries2 | uint(1) << (index - 256);
+            } else {
+                countries3 = countries3 | uint(1) << (index - 512);
+            }
+        }
+
+        return (countries1,countries2,countries3);
+    }    
+}
+
+
+
+interface StorageUser {
+    function getStorageAddress() external view returns(address _storage);
+}
+
+interface ErrorThrower {
+    event Error(string func, string message);
+}
+
+library Roles {
+  struct Role {
+    mapping (address => bool) bearer;
+  }
+
+  function add(Role storage _role, address _addr)
+    internal
+  {
+    _role.bearer[_addr] = true;
+  }
+
+  function remove(Role storage _role, address _addr)
+    internal
+  {
+    _role.bearer[_addr] = false;
+  }
+
+
+  function check(Role storage _role, address _addr)
+    internal
+    view
+  {
+    require(has(_role, _addr));
+  }
+
+  function has(Role storage _role, address _addr)
+    internal
+    view
+    returns (bool)
+  {
+    return _role.bearer[_addr];
+  }
+}
+
+contract RBAC {
+  using Roles for Roles.Role;
+
+  mapping (string => Roles.Role) private roles;
+
+  event RoleAdded(address indexed operator, string role);
+  event RoleRemoved(address indexed operator, string role);
+
+
+  function checkRole(address _operator, string _role)
+    public
+    view
+  {
+    roles[_role].check(_operator);
+  }
+
+  function hasRole(address _operator, string _role)
+    public
+    view
+    returns (bool)
+  {
+    return roles[_role].has(_operator);
+  }
+
+  function addRole(address _operator, string _role)
+    internal
+  {
+    roles[_role].add(_operator);
+    emit RoleAdded(_operator, _role);
+  }
+
+  function removeRole(address _operator, string _role)
+    internal
+  {
+    roles[_role].remove(_operator);
+    emit RoleRemoved(_operator, _role);
+  }
+
+  modifier onlyRole(string _role)
+  {
+    checkRole(msg.sender, _role);
+    _;
+  }
+
+
+}
+
+
+contract Ownable is ErrorThrower {
+    address public owner;
+    
+    event OwnershipRenounced(address indexed previousOwner);
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+
+
+     
+    constructor() public {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner(string _funcName) {
+        if(msg.sender != owner){
+            emit Error(_funcName,"Operation can only be performed by contract owner");
+            return;
+        }
+        _;
+    }
+
+     
+    function renounceOwnership() public onlyOwner("renounceOwnership") {
+        emit OwnershipRenounced(owner);
+        owner = address(0);
+    }
+
+     
+    function transferOwnership(address _newOwner) public onlyOwner("transferOwnership") {
+        _transferOwnership(_newOwner);
+    }
+
+     
+    function _transferOwnership(address _newOwner) internal {
+        if(_newOwner == address(0)){
+            emit Error("transferOwnership","New owner's address needs to be different than 0x0");
+            return;
+        }
+
+        emit OwnershipTransferred(owner, _newOwner);
+        owner = _newOwner;
+    }
+}
+
+contract SingleAllowance is Ownable {
+
+    address allowedAddress;
+
+    modifier onlyAllowed() {
+        require(allowedAddress == msg.sender);
+        _;
+    }
+
+    modifier onlyOwnerOrAllowed() {
+        require(owner == msg.sender || allowedAddress == msg.sender);
+        _;
+    }
+
+    function setAllowedAddress(address _addr) public onlyOwner("setAllowedAddress"){
+        allowedAddress = _addr;
+    }
+}
+
+
+contract Whitelist is Ownable, RBAC {
+    string public constant ROLE_WHITELISTED = "whitelist";
+
+     
+    modifier onlyIfWhitelisted(string _funcname, address _operator) {
+        if(!hasRole(_operator, ROLE_WHITELISTED)){
+            emit Error(_funcname, "Operation can only be performed by Whitelisted Addresses");
+            return;
+        }
+        _;
+    }
+
+     
+    function addAddressToWhitelist(address _operator)
+        public
+        onlyOwner("addAddressToWhitelist")
+    {
+        addRole(_operator, ROLE_WHITELISTED);
+    }
+
+     
+    function whitelist(address _operator)
+        public
+        view
+        returns (bool)
+    {
+        return hasRole(_operator, ROLE_WHITELISTED);
+    }
+
+     
+    function addAddressesToWhitelist(address[] _operators)
+        public
+        onlyOwner("addAddressesToWhitelist")
+    {
+        for (uint256 i = 0; i < _operators.length; i++) {
+            addAddressToWhitelist(_operators[i]);
+        }
+    }
+
+     
+    function removeAddressFromWhitelist(address _operator)
+        public
+        onlyOwner("removeAddressFromWhitelist")
+    {
+        removeRole(_operator, ROLE_WHITELISTED);
+    }
+
+     
+    function removeAddressesFromWhitelist(address[] _operators)
+        public
+        onlyOwner("removeAddressesFromWhitelist")
+    {
+        for (uint256 i = 0; i < _operators.length; i++) {
+            removeAddressFromWhitelist(_operators[i]);
+        }
+    }
+
+}
+
+contract BaseAdvertisementStorage is Whitelist {
+    using CampaignLibrary for CampaignLibrary.Campaign;
+
+    mapping (bytes32 => CampaignLibrary.Campaign) campaigns;
+
+    bytes32 lastBidId = 0x0;
+
+    modifier onlyIfCampaignExists(string _funcName, bytes32 _bidId) {
+        if(campaigns[_bidId].owner == 0x0){
+            emit Error(_funcName,"Campaign does not exist");
+            return;
+        }
+        _;
+    }
+    
+    event CampaignCreated
+        (
+            bytes32 bidId,
+            uint price,
+            uint budget,
+            uint startDate,
+            uint endDate,
+            bool valid,
+            address owner
+    );
+
+    event CampaignUpdated
+        (
+            bytes32 bidId,
+            uint price,
+            uint budget,
+            uint startDate,
+            uint endDate,
+            bool valid,
+            address  owner
+    );
+
+     
+    function _getCampaign(bytes32 campaignId)
+        internal
+        returns (CampaignLibrary.Campaign storage _campaign) {
+
+
+        return campaigns[campaignId];
+    }
+
+
+     
+    function _setCampaign (
+        bytes32 bidId,
+        uint price,
+        uint budget,
+        uint startDate,
+        uint endDate,
+        bool valid,
+        address owner
+    )
+    public
+    onlyIfWhitelisted("setCampaign",msg.sender) {
+
+        CampaignLibrary.Campaign storage campaign = campaigns[bidId];
+        campaign.setBidId(bidId);
+        campaign.setPrice(price);
+        campaign.setBudget(budget);
+        campaign.setStartDate(startDate);
+        campaign.setEndDate(endDate);
+        campaign.setValidity(valid);
+
+        bool newCampaign = (campaigns[bidId].getOwner() == 0x0);
+
+        campaign.setOwner(owner);
+
+
+
+        if(newCampaign){
+            emitCampaignCreated(campaign);
+            setLastBidId(bidId);
+        } else {
+            emitCampaignUpdated(campaign);
+        }
+    }
+
+     
+    constructor() public {
+        addAddressToWhitelist(msg.sender);
+    }
+
+       
+    function getCampaignPriceById(bytes32 bidId)
+        public
+        view
+        returns (uint price) {
+        return campaigns[bidId].getPrice();
+    }
+
+     
+    function setCampaignPriceById(bytes32 bidId, uint price)
+        public
+        onlyIfWhitelisted("setCampaignPriceById",msg.sender) 
+        onlyIfCampaignExists("setCampaignPriceById",bidId)      
+        {
+        campaigns[bidId].setPrice(price);
+        emitCampaignUpdated(campaigns[bidId]);
+    }
+
+     
+    function getCampaignBudgetById(bytes32 bidId)
+        public
+        view
+        returns (uint budget) {
+        return campaigns[bidId].getBudget();
+    }
+
+     
+    function setCampaignBudgetById(bytes32 bidId, uint newBudget)
+        public
+        onlyIfCampaignExists("setCampaignBudgetById",bidId)
+        onlyIfWhitelisted("setCampaignBudgetById",msg.sender)
+        {
+        campaigns[bidId].setBudget(newBudget);
+        emitCampaignUpdated(campaigns[bidId]);
+    }
+
+     
+    function getCampaignStartDateById(bytes32 bidId)
+        public
+        view
+        returns (uint startDate) {
+        return campaigns[bidId].getStartDate();
+    }
+
+     
+    function setCampaignStartDateById(bytes32 bidId, uint newStartDate)
+        public
+        onlyIfCampaignExists("setCampaignStartDateById",bidId)
+        onlyIfWhitelisted("setCampaignStartDateById",msg.sender)
+        {
+        campaigns[bidId].setStartDate(newStartDate);
+        emitCampaignUpdated(campaigns[bidId]);
+    }
+    
+     
+    function getCampaignEndDateById(bytes32 bidId)
+        public
+        view
+        returns (uint endDate) {
+        return campaigns[bidId].getEndDate();
+    }
+
+     
+    function setCampaignEndDateById(bytes32 bidId, uint newEndDate)
+        public
+        onlyIfCampaignExists("setCampaignEndDateById",bidId)
+        onlyIfWhitelisted("setCampaignEndDateById",msg.sender)
+        {
+        campaigns[bidId].setEndDate(newEndDate);
+        emitCampaignUpdated(campaigns[bidId]);
+    }
+     
+    function getCampaignValidById(bytes32 bidId)
+        public
+        view
+        returns (bool valid) {
+        return campaigns[bidId].getValidity();
+    }
+
+     
+    function setCampaignValidById(bytes32 bidId, bool isValid)
+        public
+        onlyIfCampaignExists("setCampaignValidById",bidId)
+        onlyIfWhitelisted("setCampaignValidById",msg.sender)
+        {
+        campaigns[bidId].setValidity(isValid);
+        emitCampaignUpdated(campaigns[bidId]);
+    }
+
+     
+    function getCampaignOwnerById(bytes32 bidId)
+        public
+        view
+        returns (address campOwner) {
+        return campaigns[bidId].getOwner();
+    }
+
+     
+    function setCampaignOwnerById(bytes32 bidId, address newOwner)
+        public
+        onlyIfCampaignExists("setCampaignOwnerById",bidId)
+        onlyIfWhitelisted("setCampaignOwnerById",msg.sender)
+        {
+        campaigns[bidId].setOwner(newOwner);
+        emitCampaignUpdated(campaigns[bidId]);
+    }
+
+     
+    function emitCampaignUpdated(CampaignLibrary.Campaign storage campaign) private {
+        emit CampaignUpdated(
+            campaign.getBidId(),
+            campaign.getPrice(),
+            campaign.getBudget(),
+            campaign.getStartDate(),
+            campaign.getEndDate(),
+            campaign.getValidity(),
+            campaign.getOwner()
+        );
+    }
+
+     
+    function emitCampaignCreated(CampaignLibrary.Campaign storage campaign) private {
+        emit CampaignCreated(
+            campaign.getBidId(),
+            campaign.getPrice(),
+            campaign.getBudget(),
+            campaign.getStartDate(),
+            campaign.getEndDate(),
+            campaign.getValidity(),
+            campaign.getOwner()
+        );
+    }
+
+     
+    function setLastBidId(bytes32 _newBidId) internal {    
+        lastBidId = _newBidId;
+    }
+
+     
+    function getLastBidId() 
+        external 
+        returns (bytes32 _lastBidId){
+        
+        return lastBidId;
+    }
+}
+
+contract ExtendedAdvertisementStorage is BaseAdvertisementStorage {
+    using ExtendedCampaignLibrary for ExtendedCampaignLibrary.ExtendedInfo;
+
+    mapping (bytes32 => ExtendedCampaignLibrary.ExtendedInfo) public extendedCampaignInfo;
+    
+    event ExtendedCampaignCreated(
+        bytes32 bidId,
+        address rewardManager,
+        string endPoint
+    );
+
+    event ExtendedCampaignUpdated(
+        bytes32 bidId,
+        address rewardManager,
+        string endPoint
+    );
+
+     
+    function getCampaign(bytes32 _campaignId)
+        public
+        view
+        returns (
+            bytes32 _bidId,
+            uint _price,
+            uint _budget,
+            uint _startDate,
+            uint _endDate,
+            bool _valid,
+            address _campOwner
+        ) {
+
+        CampaignLibrary.Campaign storage campaign = _getCampaign(_campaignId);
+
+        return (
+            campaign.getBidId(),
+            campaign.getPrice(),
+            campaign.getBudget(),
+            campaign.getStartDate(),
+            campaign.getEndDate(),
+            campaign.getValidity(),
+            campaign.getOwner()
+        );
+    }
+
+     
+    function setCampaign (
+        bytes32 _bidId,
+        uint _price,
+        uint _budget,
+        uint _startDate,
+        uint _endDate,
+        bool _valid,
+        address _owner,
+        address _rewardManager,
+        string _endPoint
+    )
+    public
+    onlyIfWhitelisted("setCampaign",msg.sender) {
+        
+        bool newCampaign = (getCampaignOwnerById(_bidId) == 0x0);
+        _setCampaign(_bidId, _price, _budget, _startDate, _endDate, _valid, _owner);
+        
+        ExtendedCampaignLibrary.ExtendedInfo storage extendedInfo = extendedCampaignInfo[_bidId];
+        extendedInfo.setBidId(_bidId);
+        extendedInfo.setRewardManager(_rewardManager);
+        extendedInfo.setEndpoint(_endPoint);
+
+        extendedCampaignInfo[_bidId] = extendedInfo;
+
+        if(newCampaign){
+            emit ExtendedCampaignCreated(_bidId,_rewardManager,_endPoint);
+        } else {
+            emit ExtendedCampaignUpdated(_bidId,_rewardManager,_endPoint);
+        }
+    }
+
+     
+
+    function getCampaignEndPointById(bytes32 _bidId) 
+        public returns (string _endPoint){
+        return extendedCampaignInfo[_bidId].getEndpoint();
+    }
+
+     
+    function setCampaignEndPointById(bytes32 _bidId, string _endPoint) 
+        public 
+        onlyIfCampaignExists("setCampaignEndPointById",_bidId)
+        onlyIfWhitelisted("setCampaignEndPointById",msg.sender) 
+        {
+        extendedCampaignInfo[_bidId].setEndpoint(_endPoint);
+        address _rewardManager = extendedCampaignInfo[_bidId].getRewardManager();
+        emit ExtendedCampaignUpdated(_bidId,_rewardManager,_endPoint);
+    }
+
+     
+    function setRewardManagerById(bytes32 _bidId, address _rewardManager)
+        public
+        onlyIfCampaignExists("setRewardManagerById",_bidId)
+        onlyIfWhitelisted("setRewardManagerById",msg.sender)
+        {
+        extendedCampaignInfo[_bidId].setRewardManager(_rewardManager);
+    }
+
+     
+    function getRewardManagerById(bytes32 _bidId) 
+        public 
+        returns (address _rewardManager){
+        return extendedCampaignInfo[_bidId].getRewardManager();
+    }
+
+}
+
+
+contract BaseAdvertisement is StorageUser,Ownable {
+    
+    AppCoins public appc;
+    BaseFinance public advertisementFinance;
+    BaseAdvertisementStorage public advertisementStorage;
+
+    mapping( bytes32 => mapping(address => uint256)) public userAttributions;
+
+    bytes32[] public bidIdList;
+    bytes32 public lastBidId = 0x0;
+
+
+     
+    constructor(address _addrAppc, address _addrAdverStorage, address _addrAdverFinance) public {
+        appc = AppCoins(_addrAppc);
+
+        advertisementStorage = BaseAdvertisementStorage(_addrAdverStorage);
+        advertisementFinance = BaseFinance(_addrAdverFinance);
+        lastBidId = advertisementStorage.getLastBidId();
+    }
+
+
+
+     
+
+    function importBidIds(address _addrAdvert) public onlyOwner("importBidIds") {
+
+        bytes32[] memory _bidIdsToImport = BaseAdvertisement(_addrAdvert).getBidIdList();
+        bytes32 _lastStorageBidId = advertisementStorage.getLastBidId();
+
+        for (uint i = 0; i < _bidIdsToImport.length; i++) {
+            bidIdList.push(_bidIdsToImport[i]);
+        }
+        
+        if(lastBidId < _lastStorageBidId) {
+            lastBidId = _lastStorageBidId;
+        }
+    }
+
+     
+    function upgradeFinance (address addrAdverFinance) public onlyOwner("upgradeFinance") {
+        BaseFinance newAdvFinance = BaseFinance(addrAdverFinance);
+
+        address[] memory devList = advertisementFinance.getUserList();
+        
+        for(uint i = 0; i < devList.length; i++){
+            uint balance = advertisementFinance.getUserBalance(devList[i]);
+            newAdvFinance.increaseBalance(devList[i],balance);
+        }
+        
+        uint256 initBalance = appc.balanceOf(address(advertisementFinance));
+        advertisementFinance.transferAllFunds(address(newAdvFinance));
+        uint256 oldBalance = appc.balanceOf(address(advertisementFinance));
+        uint256 newBalance = appc.balanceOf(address(newAdvFinance));
+        
+        require(initBalance == newBalance);
+        require(oldBalance == 0);
+        advertisementFinance = newAdvFinance;
+    }
+
+     
+
+    function upgradeStorage (address addrAdverStorage) public onlyOwner("upgradeStorage") {
+        for(uint i = 0; i < bidIdList.length; i++) {
+            cancelCampaign(bidIdList[i]);
+        }
+        delete bidIdList;
+
+        lastBidId = advertisementStorage.getLastBidId();
+        advertisementFinance.setAdsStorageAddress(addrAdverStorage);
+        advertisementStorage = BaseAdvertisementStorage(addrAdverStorage);
+    }
+
+
+     
+
+    function getStorageAddress() public view returns(address storageContract) {
+        require (msg.sender == address(advertisementFinance));
+
+        return address(advertisementStorage);
+    }
+
+
+     
+
+    function _generateCampaign (
+        string packageName,
+        uint[3] countries,
+        uint[] vercodes,
+        uint price,
+        uint budget,
+        uint startDate,
+        uint endDate)
+        internal returns (CampaignLibrary.Campaign memory) {
+
+        require(budget >= price);
+        require(endDate >= startDate);
+
+
+         
+        if(appc.allowance(msg.sender, address(this)) >= budget){
+            appc.transferFrom(msg.sender, address(advertisementFinance), budget);
+
+            advertisementFinance.increaseBalance(msg.sender,budget);
+
+            uint newBidId = bytesToUint(lastBidId);
+            lastBidId = uintToBytes(++newBidId);
+            
+
+            CampaignLibrary.Campaign memory newCampaign;
+            newCampaign.price = price;
+            newCampaign.startDate = startDate;
+            newCampaign.endDate = endDate;
+            newCampaign.budget = budget;
+            newCampaign.owner = msg.sender;
+            newCampaign.valid = true;
+            newCampaign.bidId = lastBidId;
+        } else {
+            emit Error("createCampaign","Not enough allowance");
+        }
+        
+        return newCampaign;
+    }
+
+    function _getStorage() internal returns (BaseAdvertisementStorage) {
+        return advertisementStorage;
+    }
+
+    function _getFinance() internal returns (BaseFinance) {
+        return advertisementFinance;
+    }
+
+    function _setUserAttribution(bytes32 _bidId,address _user,uint256 _attributions) internal{
+        userAttributions[_bidId][_user] = _attributions;
+    }
+
+
+    function getUserAttribution(bytes32 _bidId,address _user) internal returns (uint256) {
+        return userAttributions[_bidId][_user];
+    }
+
+     
+    function cancelCampaign (bytes32 bidId) public {
+        address campaignOwner = getOwnerOfCampaign(bidId);
+
+		 
+        require(owner == msg.sender || campaignOwner == msg.sender);
+        uint budget = getBudgetOfCampaign(bidId);
+
+        advertisementFinance.withdraw(campaignOwner, budget);
+
+        advertisementStorage.setCampaignBudgetById(bidId, 0);
+        advertisementStorage.setCampaignValidById(bidId, false);
+    }
+
+      
+    function getCampaignValidity(bytes32 bidId) public view returns(bool state){
+        return advertisementStorage.getCampaignValidById(bidId);
+    }
+
+     
+    function getPriceOfCampaign (bytes32 bidId) public view returns(uint price) {
+        return advertisementStorage.getCampaignPriceById(bidId);
+    }
+
+     
+    function getStartDateOfCampaign (bytes32 bidId) public view returns(uint startDate) {
+        return advertisementStorage.getCampaignStartDateById(bidId);
+    }
+
+     
+    function getEndDateOfCampaign (bytes32 bidId) public view returns(uint endDate) {
+        return advertisementStorage.getCampaignEndDateById(bidId);
+    }
+
+     
+    function getBudgetOfCampaign (bytes32 bidId) public view returns(uint budget) {
+        return advertisementStorage.getCampaignBudgetById(bidId);
+    }
+
+
+     
+    function getOwnerOfCampaign (bytes32 bidId) public view returns(address campaignOwner) {
+        return advertisementStorage.getCampaignOwnerById(bidId);
+    }
+
+     
+    function getBidIdList() public view returns(bytes32[] bidIds) {
+        return bidIdList;
+    }
+
+    function _getBidIdList() internal returns(bytes32[] storage bidIds){
+        return bidIdList;
+    }
+
+     
+    function isCampaignValid(bytes32 bidId) public view returns(bool valid) {
+        uint startDate = advertisementStorage.getCampaignStartDateById(bidId);
+        uint endDate = advertisementStorage.getCampaignEndDateById(bidId);
+        bool validity = advertisementStorage.getCampaignValidById(bidId);
+
+        uint nowInMilliseconds = now * 1000;
+        return validity && startDate < nowInMilliseconds && endDate > nowInMilliseconds;
+    }
+
+     
+    function uintToBytes (uint256 i) public view returns(bytes32 b) {
+        b = bytes32(i);
+    }
+
+    function bytesToUint(bytes32 b) public view returns (uint) 
+    {
+        return uint(b) & 0xfff;
+    }
+
+}
+
+
+contract Signature {
+
+     
+    function splitSignature(bytes sig)
+        internal
+        pure
+        returns (uint8, bytes32, bytes32)
+        {
+        require(sig.length == 65);
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+        assembly {
+             
+            r := mload(add(sig, 32))
+             
+            s := mload(add(sig, 64))
+             
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        return (v, r, s);
+    }
+
+     
+    function recoverSigner(bytes32 message, bytes sig)
+        public
+        pure
+        returns (address)
+        {
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+
+        (v, r, s) = splitSignature(sig);
+
+        return ecrecover(message, v, r, s);
+    }
+}
+
+
+contract BaseFinance is SingleAllowance {
+
+    mapping (address => uint256) balanceUsers;
+    mapping (address => bool) userExists;
+
+    address[] users;
+
+    address advStorageContract;
+
+    AppCoins appc;
+
+     
+    constructor (address _addrAppc) 
+        public {
+        appc = AppCoins(_addrAppc);
+        advStorageContract = 0x0;
+    }
+
+
+     
+    function setAdsStorageAddress (address _addrStorage) external onlyOwnerOrAllowed {
+        reset();
+        advStorageContract = _addrStorage;
+    }
+
+         
+    function setAllowedAddress (address _addr) public onlyOwner("setAllowedAddress") {
+         
+        if (allowedAddress != 0x0){
+            StorageUser storageUser = StorageUser(_addr);
+            address storageContract = storageUser.getStorageAddress();
+            require (storageContract == advStorageContract);
+        }
+        
+         
+        super.setAllowedAddress(_addr);
+    }
+
+     
+    function increaseBalance(address _user, uint256 _value) 
+        public onlyAllowed{
+
+        if(userExists[_user] == false){
+            users.push(_user);
+            userExists[_user] = true;
+        }
+
+        balanceUsers[_user] += _value;
+    }
+
+      
+    function pay(address _user, address _destination, uint256 _value) public onlyAllowed;
+
+     
+    function withdraw(address _user, uint256 _value) public onlyOwnerOrAllowed;
+
+
+     
+    function reset() public onlyOwnerOrAllowed {
+        for(uint i = 0; i < users.length; i++){
+            withdraw(users[i],balanceUsers[users[i]]);
+        }
+    }
+     
+    function transferAllFunds(address _destination) public onlyAllowed {
+        uint256 balance = appc.balanceOf(address(this));
+        appc.transfer(_destination,balance);
+    }
+
+       
+    function getUserBalance(address _user) public view onlyAllowed returns(uint256 _balance){
+        return balanceUsers[_user];
+    }
+
+     
+    function getUserList() public view onlyAllowed returns(address[] _userList){
+        return users;
+    }
+}
+
+contract ExtendedFinance is BaseFinance {
+
+    mapping ( address => uint256 ) rewardedBalance;
+
+    constructor(address _appc) public BaseFinance(_appc){
+
+    }
+
+
+    function pay(address _user, address _destination, uint256 _value)
+        public onlyAllowed{
+
+        require(balanceUsers[_user] >= _value);
+
+        balanceUsers[_user] -= _value;
+        rewardedBalance[_destination] += _value;
+    }
+
+
+    function withdraw(address _user, uint256 _value) public onlyOwnerOrAllowed {
+
+        require(balanceUsers[_user] >= _value);
+
+        balanceUsers[_user] -= _value;
+        appc.transfer(_user, _value);
+
+    }
+
+     
+    function withdrawRewards(address _user, uint256 _value) public onlyOwnerOrAllowed {
+        require(rewardedBalance[_user] >= _value);
+
+        rewardedBalance[_user] -= _value;
+        appc.transfer(_user, _value);
+    }
+     
+    function getRewardsBalance(address _user) public onlyOwnerOrAllowed returns (uint256 _balance) {
+        return rewardedBalance[_user];
+    }
+
+}
+
+
+library SafeMath {
+
+  function mul(uint256 _a, uint256 _b) internal pure returns (uint256 c) {
+     
+     
+     
+    if (_a == 0) {
+      return 0;
+    }
+
+    c = _a * _b;
+    assert(c / _a == _b);
+    return c;
+  }
+
+  function div(uint256 _a, uint256 _b) internal pure returns (uint256) {
+     
+     
+     
+    return _a / _b;
+  }
+
+
+  function sub(uint256 _a, uint256 _b) internal pure returns (uint256) {
+    assert(_b <= _a);
+    return _a - _b;
+  }
+
+  function add(uint256 _a, uint256 _b) internal pure returns (uint256 c) {
+    c = _a + _b;
+    assert(c >= _a);
+    return c;
+  }
+}
+
+
+contract ExtendedAdvertisement is BaseAdvertisement, Whitelist {
+
+    event BulkPoARegistered(bytes32 _bidId, bytes _rootHash, bytes _signature, uint256 _newHashes, uint256 _effectiveConversions);
+    event SinglePoARegistered(bytes32 _bidId, bytes _timestampAndHash, bytes _signature);
+    event CampaignInformation
+        (
+            bytes32 bidId,
+            address  owner,
+            string ipValidator,
+            string packageName,
+            uint[3] countries,
+            uint[] vercodes
+    );
+    event ExtendedCampaignInfo
+        (
+            bytes32 bidId,
+            address rewardManager,
+            string endPoint
+    );
+
+    constructor(address _addrAppc, address _addrAdverStorage, address _addrAdverFinance) public
+        BaseAdvertisement(_addrAppc,_addrAdverStorage,_addrAdverFinance) {
+        addAddressToWhitelist(msg.sender);
+    }
+
+
+    function createCampaign (
+        string packageName,
+        uint[3] countries,
+        uint[] vercodes,
+        uint price,
+        uint budget,
+        uint startDate,
+        uint endDate,
+        address rewardManager,
+        string endPoint)
+        external
+        {
+
+        CampaignLibrary.Campaign memory newCampaign = _generateCampaign(packageName, countries, vercodes, price, budget, startDate, endDate);
+
+        if(newCampaign.owner == 0x0){
+             
+            return;
+        }
+
+        _getBidIdList().push(newCampaign.bidId);
+
+        ExtendedAdvertisementStorage(address(_getStorage())).setCampaign(
+            newCampaign.bidId,
+            newCampaign.price,
+            newCampaign.budget,
+            newCampaign.startDate,
+            newCampaign.endDate,
+            newCampaign.valid,
+            newCampaign.owner,
+            rewardManager,
+            endPoint);
+
+        emit CampaignInformation(
+            newCampaign.bidId,
+            newCampaign.owner,
+            "",  
+            packageName,
+            countries,
+            vercodes);
+
+        emit ExtendedCampaignInfo(newCampaign.bidId, rewardManager, endPoint);
+    }
+
+    function bulkRegisterPoA(bytes32 _bidId, bytes _rootHash, bytes _signature, uint256 _newHashes)
+        public
+        onlyIfWhitelisted("createCampaign", msg.sender)
+        {
+
+        uint price = _getStorage().getCampaignPriceById(_bidId);
+        uint budget = _getStorage().getCampaignBudgetById(_bidId);
+        address owner = _getStorage().getCampaignOwnerById(_bidId);
+        uint maxConversions = SafeMath.div(budget,price);
+        uint effectiveConversions;
+        uint totalPay;
+        uint newBudget;
+
+        if (maxConversions >= _newHashes){
+            effectiveConversions = _newHashes;
+        } else {
+            effectiveConversions = maxConversions;
+        }
+
+        totalPay = SafeMath.mul(price,effectiveConversions);
+        
+        newBudget = SafeMath.sub(budget,totalPay);
+
+        _getFinance().pay(owner, msg.sender, totalPay);
+        _getStorage().setCampaignBudgetById(_bidId, newBudget);
+
+        if(newBudget < price){
+            _getStorage().setCampaignValidById(_bidId, false);
+        }
+
+        emit BulkPoARegistered(_bidId, _rootHash, _signature, _newHashes, effectiveConversions);
+    }
+
+
+    function withdraw()
+        public
+        onlyIfWhitelisted("withdraw",msg.sender)
+        {
+        uint256 balance = ExtendedFinance(address(_getFinance())).getRewardsBalance(msg.sender);
+        ExtendedFinance(address(_getFinance())).withdrawRewards(msg.sender,balance);
+    }
+
+    function getRewardsBalance(address _user) public view returns (uint256 _balance) {
+        return ExtendedFinance(address(_getFinance())).getRewardsBalance(_user);
+    }
+
+
+    function getEndPointOfCampaign (bytes32 bidId) public view returns (string url){
+        return ExtendedAdvertisementStorage(address(_getStorage())).getCampaignEndPointById(bidId);
+    }
+}

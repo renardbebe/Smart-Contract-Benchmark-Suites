@@ -1,0 +1,337 @@
+ 
+
+pragma solidity ^0.4.16;
+
+ 
+library SafeMath {
+  function mul(uint256 a, uint256 b) internal constant returns (uint256) {
+    uint256 c = a * b;
+    assert(a == 0 || c / a == b);
+    return c;
+  }
+
+  function div(uint256 a, uint256 b) internal constant returns (uint256) {
+     
+    uint256 c = a / b;
+     
+    return c;
+  }
+
+  function sub(uint256 a, uint256 b) internal constant returns (uint256) {
+    assert(b <= a);
+    return a - b;
+  }
+
+  function add(uint256 a, uint256 b) internal constant returns (uint256) {
+    uint256 c = a + b;
+    assert(c >= a);
+    return c;
+  }
+}
+
+ 
+contract ERC20Basic {
+  uint256 public totalSupply;
+  function balanceOf(address who) constant returns (uint256);
+  function transfer(address to, uint256 value) returns (bool);
+  event Transfer(address indexed from, address indexed to, uint256 value);
+}
+
+
+ 
+contract BasicToken is ERC20Basic {
+  using SafeMath for uint256;
+
+  mapping(address => uint256) balances;
+
+   
+  function transfer(address _to, uint256 _value) returns (bool) {
+    balances[msg.sender] = balances[msg.sender].sub(_value);
+    balances[_to] = balances[_to].add(_value);
+    Transfer(msg.sender, _to, _value);
+    return true;
+  }
+
+   
+  function balanceOf(address _owner) constant returns (uint256 balance) {
+    return balances[_owner];
+  }
+
+}
+
+ 
+contract ERC20 is ERC20Basic {
+  function allowance(address owner, address spender) constant returns (uint256);
+  function transferFrom(address from, address to, uint256 value) returns (bool);
+  function approve(address spender, uint256 value) returns (bool);
+  event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
+ 
+contract StandardToken is ERC20, BasicToken {
+
+  mapping (address => mapping (address => uint256)) allowed;
+
+   
+  function transferFrom(address _from, address _to, uint256 _value) returns (bool) {
+    var _allowance = allowed[_from][msg.sender];
+
+     
+     
+
+    balances[_to] = balances[_to].add(_value);
+    balances[_from] = balances[_from].sub(_value);
+    allowed[_from][msg.sender] = _allowance.sub(_value);
+    Transfer(_from, _to, _value);
+    return true;
+  }
+
+   
+  function approve(address _spender, uint256 _value) returns (bool) {
+
+     
+     
+     
+     
+    require((_value == 0) || (allowed[msg.sender][_spender] == 0));
+
+    allowed[msg.sender][_spender] = _value;
+    Approval(msg.sender, _spender, _value);
+    return true;
+  }
+
+   
+  function allowance(address _owner, address _spender) constant returns (uint256 remaining) {
+    return allowed[_owner][_spender];
+  }
+
+}
+
+ 
+contract Ownable {
+  address public owner;
+
+   
+  function Ownable() {
+    owner = msg.sender;
+  }
+
+   
+  modifier onlyOwner() {
+    require(msg.sender == owner);
+    _;
+  }
+
+   
+  function transferOwnership(address newOwner) onlyOwner {
+    if (newOwner != address(0)) {
+      owner = newOwner;
+    }
+  }
+
+}
+
+ 
+contract Pausable is Ownable {
+  event Pause();
+  event Unpause();
+
+  bool public paused = false;
+
+   
+  modifier whenNotPaused() {
+    require(!paused);
+    _;
+  }
+
+   
+  modifier whenPaused {
+    require(paused);
+    _;
+  }
+
+   
+  function pause() onlyOwner whenNotPaused returns (bool) {
+    paused = true;
+    Pause();
+    return true;
+  }
+
+   
+  function unpause() onlyOwner whenPaused returns (bool) {
+    paused = false;
+    Unpause();
+    return true;
+  }
+}
+
+ 
+ 
+contract SlotTicket is StandardToken, Ownable {
+
+  string public name = "Slot Ticket";
+  uint8 public decimals = 0;
+  string public symbol = "SLOT";
+  string public version = "0.1";
+
+  event Mint(address indexed to, uint256 amount);
+
+  function mint(address _to, uint256 _amount) onlyOwner returns (bool) {
+    totalSupply = totalSupply.add(_amount);
+    balances[_to] = balances[_to].add(_amount);
+    Mint(_to, _amount);
+    Transfer(0x0, _to, _amount);  
+    return true;
+  }
+
+function destroy() onlyOwner {
+     
+    selfdestruct(owner);
+  }
+
+}
+
+contract Slot is Ownable, Pausable {  
+    using SafeMath for uint256;
+
+     
+    SlotTicket public token;
+
+     
+     
+     
+    mapping (uint => mapping (uint => address)) participants;  
+    uint256[] prizes = [0.04 ether, 
+                        0.02 ether,
+                        0.01 ether, 
+                        5 finney, 
+                        5 finney, 
+                        5 finney, 
+                        5 finney, 
+                        5 finney];
+    
+
+    uint8   constant public SIZE = 10;  
+    uint32  constant public JACKPOT_SIZE = 1000000;  
+    uint256 constant public PRICE = 10 finney;
+    
+    uint256 public jackpot;
+    uint256 public gameNumber;
+    address wallet;
+    uint256 counter;
+
+    event AnotherParticipant(address indexed _participant, uint256 indexed _game, uint256 indexed _number);
+    event PrizeAwarded(uint256 indexed _game , address indexed _winner, uint256 indexed _amount);
+    event JackpotAwarded(uint256 indexed _game, address indexed _winner, uint256 indexed _amount);
+    event Refunded(address indexed _participant, uint256 _amount);
+
+    function Slot(address _wallet) payable {
+        token = new SlotTicket();
+        wallet = _wallet;
+
+        jackpot = 0;
+        gameNumber = 0;
+        counter = 0;
+    }
+
+    function() payable {
+         
+        buyTicketsFor(msg.sender);
+    }
+
+    function buyTicketsFor(address beneficiary) whenNotPaused() payable {
+        require(beneficiary != 0x0);
+        require(msg.value >= PRICE);
+
+         
+         
+        uint256 change = msg.value%PRICE;
+        uint256 numberOfTickets = msg.value.sub(change).div(PRICE);
+        token.mint(beneficiary, numberOfTickets);
+        addParticipant(beneficiary, numberOfTickets);
+
+         
+         
+        msg.sender.transfer(change);
+    }
+
+    function addParticipant(address _participant, uint256 _numberOfTickets) private {
+         
+
+        for (uint256 i = 0; i < _numberOfTickets; i++) {
+            participants[counter/SIZE][counter%SIZE] = _participant;
+            AnotherParticipant(_participant, counter/SIZE, counter%SIZE);
+
+             
+            if (++counter%SIZE == 0) 
+                awardPrizes();
+        
+             
+        }
+        
+    }
+    
+    function rand(uint32 _size) constant private returns (uint256 randomNumber) {
+       
+       
+       
+
+        return uint256(keccak256(block.blockhash(block.number-1), block.blockhash(block.number-10)))%_size;
+    }
+
+    function awardPrizes() private {
+        uint256 winnerIndex = rand(SIZE);
+         
+        bool jackpotWon = winnerIndex == rand(JACKPOT_SIZE); 
+
+         
+        for (uint8 i = 0; i < prizes.length; i++) {
+            
+            if (jackpotWon && i==0) 
+                distributeJackpot(winnerIndex);
+
+            participants[gameNumber][winnerIndex%SIZE].transfer(prizes[i]);  
+            PrizeAwarded(gameNumber, participants[gameNumber][winnerIndex%SIZE], prizes[i]);
+
+            winnerIndex++;
+        }
+        
+         
+        jackpot = jackpot.add(2.5 finney);   
+        wallet.transfer(2.49 finney);         
+         
+        msg.sender.transfer(0.01 finney);      
+
+        gameNumber++;
+    }
+
+    function distributeJackpot(uint256 _winnerIndex) private {
+        participants[gameNumber][_winnerIndex].transfer(jackpot);
+        JackpotAwarded(gameNumber,  participants[gameNumber][_winnerIndex], jackpot);
+        jackpot = 0;  
+    }
+
+    function refundAll() onlyOwner {
+         
+
+        for (uint8 i = 0; i < counter%SIZE; i++) {  
+            participants[gameNumber][i].transfer(PRICE);
+            Refunded(msg.sender, PRICE);
+        }
+
+         
+        counter -= counter%SIZE;
+    }
+
+    function destroy() onlyOwner {
+         
+        token.destroy();
+        selfdestruct(owner);
+    }
+
+    function changeWallet(address _newWallet) onlyOwner {
+        require(_newWallet != 0x0);
+        wallet = _newWallet;
+    }
+
+}
