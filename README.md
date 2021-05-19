@@ -35,6 +35,8 @@ Step3. Run each tool with different settings.
 \> Provide each tool with different runtime parameters, and count the execution results.
 
 
+> Required Operating System: Linux
+
 
 ## Detailed Description
 To make up for the lack of a unified test set, we construct a benchmark suite with contracts crawled from Etherscan, SolidiFI repository, Common Vulnerabilities and Exposures library and Smart Contract Weakness Classification and Test Cases library. They can be classified into three categories: 1) unlabeled real-world contracts; 2) contracts with manually injected bugs; 3) confirmed vulnerable contracts. We believe that the evaluation results will generalize due to the size and diversity of our benchmarks.
